@@ -8,6 +8,25 @@ Outil de gestion de production pour coproductions internationales. Première ins
 **Budget Phase 1 :** 3 500 $ CAD
 **Deadline :** Opérationnel mi-mai 2026
 
+## État d'avancement (2026-04-22)
+
+**Fait :**
+- Scaffold React 19 / Vite 6 / Tailwind v4 / React Router 7 / Supabase client
+- Repo GitHub public : https://github.com/pierremichaudpm/gestionsila
+- Config Netlify (netlify.toml) prête pour déploiement
+- Layout + sidebar navy + 6 routes (5 placeholder + Production)
+- Schéma SQL complet (11 tables) + RLS + helpers `SECURITY DEFINER` : [supabase/migrations/001_schema.sql](supabase/migrations/001_schema.sql)
+- Seed dev SILA (project, orgs, équipes, lots, bailleurs) : [supabase/seed.sql](supabase/seed.sql)
+- Page Production complète avec les 4 blocs du spec, fetch Supabase réel, skeletons, empty states
+
+**En attente :**
+- Config Supabase (projet cloud, migration, seed, `.env.local`) — prévu 2026-04-23
+- Auth flow (page login, session management)
+- Pages Lots / Documents / Livrables / Équipe / Paramètres (actuellement placeholders)
+- Déploiement Netlify
+
+**Journal complet :** voir [WORKING_LOG.md](WORKING_LOG.md).
+
 ## Stack
 - **Frontend :** React 19 + Vite + Tailwind CSS
 - **Hosting :** Netlify
