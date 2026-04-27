@@ -39,6 +39,11 @@ export default function Sidebar() {
         <div className="mt-1 text-sm font-semibold leading-tight">
           SILA — Héroïnes Arctiques
         </div>
+        <div className="mt-3 flex gap-2.5">
+          <LogoCircle src="/logos/jaxa-icon-512.png" alt="JAXA Production" />
+          <LogoCircle src="/logos/Logo_DarkEuphoria_DE-logo-noir.png" alt="Dark Euphoria" />
+          <LogoCircle src="/logos/Logo_PoulpeBleu.jpg" alt="Poulpe Bleu Production" />
+        </div>
       </div>
 
       <nav className="flex-1 space-y-1 px-3">
@@ -82,6 +87,14 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+  )
+}
+
+function LogoCircle({ src, alt }) {
+  return (
+    <div className="h-12 w-12 shrink-0 rounded-full bg-white p-1.5 shadow-sm" title={alt}>
+      <img src={src} alt={alt} className="h-full w-full object-contain" />
+    </div>
   )
 }
 
