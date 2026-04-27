@@ -6,6 +6,7 @@ export function useCurrentProject() {
     projectId: null,
     project: null,
     accessLevel: null,
+    orgId: null,
     loading: true,
     error: null,
   })
@@ -18,13 +19,13 @@ export function useCurrentProject() {
       if (!alive) return
 
       if (userError || !userData?.user) {
-        setState({ projectId: null, project: null, accessLevel: null, loading: false, error: userError ?? null })
+        setState({ projectId: null, project: null, accessLevel: null, orgId: null, loading: false, error: userError ?? null })
         return
       }
 
       const { data, error } = await supabase
         .from('project_members')
-        .select('project_id, access_level, projects(id, name, description)')
+        .select('project_id, org_id, access_level, projects(id, name, description)')
         .eq('user_id', userData.user.id)
         .limit(1)
         .maybeSingle()
@@ -32,17 +33,18 @@ export function useCurrentProject() {
       if (!alive) return
 
       if (error) {
-        setState({ projectId: null, project: null, accessLevel: null, loading: false, error })
+        setState({ projectId: null, project: null, accessLevel: null, orgId: null, loading: false, error })
         return
       }
       if (!data) {
-        setState({ projectId: null, project: null, accessLevel: null, loading: false, error: null })
+        setState({ projectId: null, project: null, accessLevel: null, orgId: null, loading: false, error: null })
         return
       }
       setState({
         projectId: data.project_id,
         project: data.projects,
         accessLevel: data.access_level,
+        orgId: data.org_id,
         loading: false,
         error: null,
       })

@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { to: '/lots', label: 'Lots' },
   { to: '/documents', label: 'Documents' },
   { to: '/livrables', label: 'Livrables' },
+  { to: '/budget', label: 'Budget' },
   { to: '/equipe', label: 'Équipe' },
 ]
 

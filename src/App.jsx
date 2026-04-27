@@ -7,6 +7,7 @@ import Lots from './pages/Lots.jsx'
 import LotDetail from './pages/LotDetail.jsx'
 import Documents from './pages/Documents.jsx'
 import Livrables from './pages/Livrables.jsx'
+import Budget from './pages/Budget.jsx'
 import Equipe from './pages/Equipe.jsx'
 import Parametres from './pages/Parametres.jsx'
 
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/lots/:id" element={<LotDetail />} />
           <Route path="/documents" element={<Documents />} />
           <Route path="/livrables" element={<Livrables />} />
+          <Route path="/budget" element={<Budget />} />
           <Route path="/equipe" element={<Equipe />} />
           <Route path="/parametres" element={<Parametres />} />
           <Route path="*" element={<Navigate to="/production" replace />} />
