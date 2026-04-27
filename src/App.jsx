@@ -3,6 +3,7 @@ import Layout from './components/layout/Layout.jsx'
 import ProtectedRoute from './components/auth/ProtectedRoute.jsx'
 import Login from './pages/Login.jsx'
 import Production from './pages/Production.jsx'
+import Calendrier from './pages/Calendrier.jsx'
 import Lots from './pages/Lots.jsx'
 import LotDetail from './pages/LotDetail.jsx'
 import Documents from './pages/Documents.jsx'
@@ -19,6 +20,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Navigate to="/production" replace />} />
           <Route path="/production" element={<Production />} />
+          <Route path="/calendrier" element={<Calendrier />} />
           <Route path="/lots" element={<Lots />} />
           <Route path="/lots/:id" element={<LotDetail />} />
           <Route path="/documents" element={<Documents />} />

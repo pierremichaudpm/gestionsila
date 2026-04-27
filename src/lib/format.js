@@ -68,6 +68,18 @@ const TONE_CLASSES = {
   late:    'bg-red-50 text-red-700',
 }
 
+const MILESTONE_TYPE = {
+  depot_fonds:      { label: 'Dépôt fonds',      badge: 'bg-blue-50 text-blue-700' },
+  festival:         { label: 'Festival',         badge: 'bg-fuchsia-50 text-fuchsia-700' },
+  premiere:         { label: 'Première',         badge: 'bg-emerald-50 text-emerald-700' },
+  jalon_production: { label: 'Jalon production', badge: 'bg-amber-50 text-amber-700' },
+}
+
+const MONTHS_FR = [
+  'janvier', 'février', 'mars',     'avril',   'mai',      'juin',
+  'juillet', 'août',    'septembre','octobre', 'novembre', 'décembre',
+]
+
 export function lotStatus(s) {
   return LOT_STATUS[s] ?? { label: s, tone: 'neutral' }
 }
@@ -100,11 +112,34 @@ export function toneClass(tone) {
   return TONE_CLASSES[tone] ?? TONE_CLASSES.neutral
 }
 
+export function milestoneType(t) {
+  return MILESTONE_TYPE[t] ?? { label: t, badge: 'bg-slate-100 text-slate-700' }
+}
+
 export const LOT_STATUS_OPTIONS = Object.keys(LOT_STATUS)
 export const DELIVERABLE_STATUS_OPTIONS = Object.keys(DELIVERABLE_STATUS)
 export const VALIDATION_STATUS_OPTIONS = Object.keys(VALIDATION_STATUS)
 export const DOCUMENT_CATEGORY_OPTIONS = Object.keys(DOCUMENT_CATEGORY)
 export const COUNTRY_OPTIONS = Object.keys(COUNTRY_FLAGS)
+export const MILESTONE_TYPE_OPTIONS = Object.keys(MILESTONE_TYPE)
+
+// PG date columns (no time): force UTC parse to avoid timezone off-by-one
+// when client is west of UTC (e.g. America/Toronto would show 2026-06-14
+// for a stored date of 2026-06-15 with the naive new Date(iso) approach).
+export function formatDateOnly(iso) {
+  if (!iso) return '—'
+  const [year, month, day] = iso.split('-').map(s => parseInt(s, 10))
+  return new Date(Date.UTC(year, month - 1, day))
+    .toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
+}
+
+export function formatMonth(monthKey) {
+  if (!monthKey) return '—'
+  const [year, monthStr] = monthKey.split('-')
+  const idx = parseInt(monthStr, 10) - 1
+  const name = MONTHS_FR[idx] ?? '?'
+  return name.charAt(0).toUpperCase() + name.slice(1) + ' ' + year
+}
 
 export function formatAmount(amount, currency) {
   if (amount === null || amount === undefined) return '—'
