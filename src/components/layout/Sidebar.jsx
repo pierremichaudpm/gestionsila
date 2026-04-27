@@ -35,14 +35,14 @@ export default function Sidebar() {
   return (
     <aside className="flex w-[280px] shrink-0 flex-col bg-[color:var(--color-brand-navy)] text-white">
       <div className="px-5 py-6">
-        <div className="text-xs uppercase tracking-wide text-slate-300">Projet</div>
-        <div className="mt-1 text-xl font-bold leading-tight tracking-tight">
-          SILA — Héroïnes Arctiques
-        </div>
-        <div className="mt-3 flex gap-2.5">
+        <div className="flex gap-2.5">
           <LogoCircle src="/logos/jaxa-icon-512.png" alt="JAXA Production" />
           <LogoCircle src="/logos/Logo_DarkEuphoria_DE-logo-noir.png" alt="Dark Euphoria" />
           <LogoCircle src="/logos/Logo_PoulpeBleu.jpg" alt="Poulpe Bleu Production" cover />
+        </div>
+        <div className="mt-4 text-xs uppercase tracking-wide text-slate-300">Projet</div>
+        <div className="mt-1 text-xl font-bold leading-tight tracking-tight">
+          SILA — Héroïnes Arctiques
         </div>
       </div>
 
