@@ -36,7 +36,7 @@ export default function Sidebar() {
     <aside className="flex w-[280px] shrink-0 flex-col bg-[color:var(--color-brand-navy)] text-white">
       <div className="px-5 py-6">
         <div className="text-xs uppercase tracking-wide text-slate-300">Projet</div>
-        <div className="mt-1 text-sm font-semibold leading-tight">
+        <div className="mt-1 text-xl font-bold leading-tight tracking-tight">
           SILA — Héroïnes Arctiques
         </div>
         <div className="mt-3 flex gap-2.5">
