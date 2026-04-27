@@ -41,7 +41,7 @@ export default function Sidebar() {
           <LogoCircle src="/logos/Logo_PoulpeBleu.jpg" alt="Poulpe Bleu Production" cover />
         </div>
         <div className="mt-5 text-xs uppercase tracking-wide text-slate-300">Projet</div>
-        <div className="mt-1 text-xl font-bold leading-tight tracking-tight">
+        <div className="mt-1 text-2xl font-bold leading-tight tracking-tight">
           SILA — Héroïnes Arctiques
         </div>
       </div>
