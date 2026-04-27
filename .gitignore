@@ -30,3 +30,7 @@ dist-ssr
 
 # Netlify
 .netlify
+
+# Supabase
+supabase/.temp
+supabase/.branches
