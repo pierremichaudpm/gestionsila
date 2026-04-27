@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthProvider.jsx'
 
 const NAV_ITEMS = [
-  { to: '/production', label: 'Production' },
+  { to: '/production', label: 'Dashboard' },
   { to: '/calendrier', label: 'Calendrier' },
   { to: '/lots', label: 'Lots' },
   { to: '/documents', label: 'Documents' },
