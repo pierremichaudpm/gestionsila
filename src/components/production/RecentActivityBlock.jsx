@@ -80,7 +80,11 @@ export default function RecentActivityBlock({ projectId }) {
 }
 
 function describe(item) {
-  const subject = item.metadata?.title ?? item.metadata?.name ?? null
+  const subject =
+    item.metadata?.title ??
+    item.metadata?.name ??
+    item.metadata?.category ??
+    null
   const suffix = subject ? ` : ${subject}` : ''
   const verb = ACTION_LABELS[item.action] ?? item.action
   const target = ENTITY_LABELS[item.entity_type] ?? item.entity_type
@@ -103,6 +107,7 @@ const ENTITY_LABELS = {
   task:        'une tâche',
   funder:      'un bailleur',
   deliverable: 'un livrable',
+  milestone:   'un jalon',
   budget_line: 'une ligne de budget',
   user:        'un utilisateur',
 }

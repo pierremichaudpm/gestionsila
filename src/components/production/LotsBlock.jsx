@@ -18,7 +18,7 @@ export default function LotsBlock({ projectId }) {
 
       const { data, error } = await supabase
         .from('lots')
-        .select('id, name, director, country, status, sort_order, documents(count)')
+        .select('id, name, director, country, status, sort_order, documents(count), milestones(count)')
         .eq('project_id', projectId)
         .order('sort_order', { ascending: true })
 
@@ -68,9 +68,10 @@ export default function LotsBlock({ projectId }) {
 function LotCard({ lot }) {
   const status = lotStatus(lot.status)
   const docCount = lot.documents?.[0]?.count ?? 0
+  const msCount = lot.milestones?.[0]?.count ?? 0
   return (
     <Link
-      to="/lots"
+      to={`/lots/${lot.id}`}
       className="group flex h-full flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow"
     >
       <div className="flex items-start justify-between gap-2">
@@ -94,7 +95,7 @@ function LotCard({ lot }) {
         <p className="mt-1 text-xs text-slate-500">{lot.director}</p>
       ) : null}
       <div className="mt-auto pt-3 text-xs text-slate-500">
-        {docCount} {docCount > 1 ? 'documents' : 'document'}
+        {docCount} {docCount > 1 ? 'docs' : 'doc'} · {msCount} {msCount > 1 ? 'jalons' : 'jalon'}
       </div>
     </Link>
   )

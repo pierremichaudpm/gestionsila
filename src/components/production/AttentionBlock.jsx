@@ -5,6 +5,7 @@ import {
   daysUntil,
   documentCategory,
   formatDate,
+  milestoneType,
   relativeTime,
   toneClass,
 } from '../../lib/format'
@@ -41,6 +42,13 @@ export default function AttentionBlock({ projectId }) {
         .lte('due_date', horizonDate)
         .order('due_date', { ascending: true })
 
+      const milestonesQ = supabase
+        .from('milestones')
+        .select('id, title, date, type, country')
+        .eq('project_id', projectId)
+        .lte('date', horizonDate)
+        .order('date', { ascending: true })
+
       const documentsQ = currentUserId
         ? supabase
             .from('documents')
@@ -51,11 +59,15 @@ export default function AttentionBlock({ projectId }) {
             .order('updated_at', { ascending: false })
         : Promise.resolve({ data: [], error: null })
 
-      const [deliverablesRes, documentsRes] = await Promise.all([deliverablesQ, documentsQ])
+      const [deliverablesRes, milestonesRes, documentsRes] = await Promise.all([
+        deliverablesQ,
+        milestonesQ,
+        documentsQ,
+      ])
       if (!alive) return
 
-      if (deliverablesRes.error || documentsRes.error) {
-        setError(deliverablesRes.error ?? documentsRes.error)
+      if (deliverablesRes.error || milestonesRes.error || documentsRes.error) {
+        setError(deliverablesRes.error ?? milestonesRes.error ?? documentsRes.error)
         setLoading(false)
         return
       }
@@ -67,18 +79,28 @@ export default function AttentionBlock({ projectId }) {
           kind: 'deliverable',
           id: d.id,
           urgency: overdue ? 0 : 1,
-          badge: overdue
-            ? 'En retard'
-            : days === 0
-              ? "Aujourd'hui"
-              : days === 1
-                ? 'Demain'
-                : `Dans ${days} j.`,
+          badge: badgeForDays(days, overdue),
           tone: overdue ? 'late' : 'warn',
           title: d.title,
           context: d.funder?.name ?? '—',
           date: formatDate(d.due_date),
           to: '/livrables',
+        }
+      })
+
+      const milestoneItems = (milestonesRes.data ?? []).map(m => {
+        const days = daysUntil(m.date)
+        const overdue = days !== null && days < 0
+        return {
+          kind: 'milestone',
+          id: m.id,
+          urgency: overdue ? 0 : 1,
+          badge: badgeForDays(days, overdue),
+          tone: overdue ? 'late' : 'warn',
+          title: m.title,
+          context: milestoneType(m.type).label,
+          date: formatDate(m.date),
+          to: '/calendrier',
         }
       })
 
@@ -94,7 +116,10 @@ export default function AttentionBlock({ projectId }) {
         to: '/documents',
       }))
 
-      setItems([...deliverableItems, ...documentItems].sort((a, b) => a.urgency - b.urgency))
+      setItems(
+        [...deliverableItems, ...milestoneItems, ...documentItems]
+          .sort((a, b) => a.urgency - b.urgency)
+      )
       setLoading(false)
     }
 
@@ -138,6 +163,13 @@ export default function AttentionBlock({ projectId }) {
       </div>
     </section>
   )
+}
+
+function badgeForDays(days, overdue) {
+  if (overdue) return 'En retard'
+  if (days === 0) return "Aujourd'hui"
+  if (days === 1) return 'Demain'
+  return `Dans ${days} j.`
 }
 
 function SectionHeader({ title, count }) {
