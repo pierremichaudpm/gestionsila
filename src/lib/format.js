@@ -50,6 +50,7 @@ const DOCUMENT_CATEGORY = {
   report:                'Rapport',
   technical_deliverable: 'Livrable technique',
   invoice:               'Facture',
+  reference:             'Référence',
 }
 
 const CATEGORY_BADGE = {
@@ -59,6 +60,7 @@ const CATEGORY_BADGE = {
   report:                'bg-teal-50 text-teal-700',
   technical_deliverable: 'bg-orange-50 text-orange-700',
   invoice:               'bg-slate-100 text-slate-700',
+  reference:             'bg-cyan-50 text-cyan-700',
 }
 
 const TONE_CLASSES = {
@@ -91,6 +93,7 @@ const PRODUCER_FOLDER = {
 // "+ Nouveau document" et reste cohérent avec le commentaire de la migration 008.
 const CATEGORY_TO_FOLDER = {
   technical_deliverable: 'techno',
+  reference:             'techno',
   artistic_dossier:      'creation',
   scenario:              'creation',
   contract:              'texte',

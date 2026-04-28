@@ -205,6 +205,7 @@ export default function Documents() {
           actionError={actionError}
           filters={filters}
           updateFilter={updateFilter}
+          onResetFilters={() => { setFilters({ lot: '', status: '', country: '' }); setPage(0) }}
           lots={lots}
           sorted={sorted}
           visibleDocs={visibleDocs}
@@ -300,6 +301,7 @@ function ListView({
   actionError,
   filters,
   updateFilter,
+  onResetFilters,
   lots,
   sorted,
   visibleDocs,
@@ -320,7 +322,12 @@ function ListView({
 }) {
   return (
     <>
-      <Filters filters={filters} onChange={updateFilter} lots={lots} />
+      <Filters
+        filters={filters}
+        onChange={updateFilter}
+        onReset={onResetFilters}
+        lots={lots}
+      />
 
       {actionError ? (
         <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -378,38 +385,52 @@ function ListView({
   )
 }
 
-function Filters({ filters, onChange, lots }) {
+function Filters({ filters, onChange, onReset, lots }) {
+  const hasActiveFilter = !!(filters.lot || filters.status || filters.country)
   return (
-    <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-3">
-      <FilterSelect
-        label="Tableau"
-        value={filters.lot}
-        onChange={(v) => onChange('lot', v)}
-      >
-        <option value="">Tous les tableaux</option>
-        <option value="transversal">Transversal</option>
-        {lots.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-      </FilterSelect>
-      <FilterSelect
-        label="Statut"
-        value={filters.status}
-        onChange={(v) => onChange('status', v)}
-      >
-        <option value="">Tous</option>
-        {VALIDATION_STATUS_OPTIONS.map(s => (
-          <option key={s} value={s}>{validationStatus(s).label}</option>
-        ))}
-      </FilterSelect>
-      <FilterSelect
-        label="Pays"
-        value={filters.country}
-        onChange={(v) => onChange('country', v)}
-      >
-        <option value="">Tous</option>
-        {COUNTRY_OPTIONS.map(c => (
-          <option key={c} value={c}>{countryFlag(c)} {countryName(c)}</option>
-        ))}
-      </FilterSelect>
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <FilterSelect
+          label="Tableau"
+          value={filters.lot}
+          onChange={(v) => onChange('lot', v)}
+        >
+          <option value="">Tous les tableaux</option>
+          <option value="transversal">Transversal</option>
+          {lots.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+        </FilterSelect>
+        <FilterSelect
+          label="Statut"
+          value={filters.status}
+          onChange={(v) => onChange('status', v)}
+        >
+          <option value="">Tous</option>
+          {VALIDATION_STATUS_OPTIONS.map(s => (
+            <option key={s} value={s}>{validationStatus(s).label}</option>
+          ))}
+        </FilterSelect>
+        <FilterSelect
+          label="Pays"
+          value={filters.country}
+          onChange={(v) => onChange('country', v)}
+        >
+          <option value="">Tous</option>
+          {COUNTRY_OPTIONS.map(c => (
+            <option key={c} value={c}>{countryFlag(c)} {countryName(c)}</option>
+          ))}
+        </FilterSelect>
+      </div>
+      {hasActiveFilter ? (
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={onReset}
+            className="text-xs text-brand-blue hover:underline"
+          >
+            Réinitialiser les filtres
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }
