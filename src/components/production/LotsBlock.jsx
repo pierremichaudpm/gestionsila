@@ -40,7 +40,7 @@ export default function LotsBlock({ projectId }) {
   return (
     <section>
       <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lots</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Lots</h2>
         {!loading && !error ? (
           <span className="text-xs text-slate-400">{lots.length}</span>
         ) : null}

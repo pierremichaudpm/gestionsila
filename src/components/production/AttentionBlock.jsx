@@ -175,7 +175,7 @@ function badgeForDays(days, overdue) {
 function SectionHeader({ title, count }) {
   return (
     <div className="mb-3 flex items-baseline justify-between">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
       {count !== null && count !== undefined ? (
         <span className="text-xs text-slate-400">
           {count} {count > 1 ? 'éléments' : 'élément'}

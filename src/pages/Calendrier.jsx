@@ -226,7 +226,7 @@ function MonthSection({ monthKey, items, lots }) {
   const lotsById = Object.fromEntries(lots.map(l => [l.id, l]))
   return (
     <section>
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
         {formatMonth(monthKey)}
       </h2>
       <ol className="relative ml-3 space-y-3 border-l-2 border-slate-200 pl-6">
