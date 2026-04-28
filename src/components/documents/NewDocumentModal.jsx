@@ -2,28 +2,35 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import {
   documentCategory,
+  documentFolder,
   DOCUMENT_CATEGORY_OPTIONS,
+  DOCUMENT_FOLDER_OPTIONS,
+  folderForCategory,
 } from '../../lib/format'
 import Modal from '../ui/Modal.jsx'
 
-const INITIAL = {
-  title: '',
-  drive_url: '',
-  category: 'contract',
-  lot_id: '',
-}
+const INITIAL_CATEGORY = 'contract'
 
-export default function NewDocumentModal({ open, onClose, projectId, userCountry, userId, lots, onCreated }) {
-  const [form, setForm] = useState(INITIAL)
+export default function NewDocumentModal({
+  open,
+  onClose,
+  projectId,
+  userCountry,
+  userId,
+  lots,
+  defaultFolder,
+  onCreated,
+}) {
+  const [form, setForm] = useState(buildInitial(defaultFolder))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     if (open) {
-      setForm(INITIAL)
+      setForm(buildInitial(defaultFolder))
       setError(null)
     }
-  }, [open])
+  }, [open, defaultFolder])
 
   function update(key, value) {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -60,6 +67,7 @@ export default function NewDocumentModal({ open, onClose, projectId, userCountry
       uploaded_by: userId,
       title: form.title,
       category: form.category,
+      folder: form.folder,
       country: userCountry,
       version,
       validation_status: 'draft',
@@ -98,17 +106,32 @@ export default function NewDocumentModal({ open, onClose, projectId, userCountry
           />
         </Field>
 
-        <Field label="Catégorie">
-          <select
-            value={form.category}
-            onChange={(e) => update('category', e.target.value)}
-            className="block w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
-          >
-            {DOCUMENT_CATEGORY_OPTIONS.map(c => (
-              <option key={c} value={c}>{documentCategory(c)}</option>
-            ))}
-          </select>
-        </Field>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Sous-dossier" required>
+            <select
+              required
+              value={form.folder}
+              onChange={(e) => update('folder', e.target.value)}
+              className="block w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+            >
+              {DOCUMENT_FOLDER_OPTIONS.map(f => (
+                <option key={f} value={f}>{documentFolder(f).label}</option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Catégorie">
+            <select
+              value={form.category}
+              onChange={(e) => update('category', e.target.value)}
+              className="block w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+            >
+              {DOCUMENT_CATEGORY_OPTIONS.map(c => (
+                <option key={c} value={c}>{documentCategory(c)}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
 
         <Field label="Tableau">
           <select
@@ -151,6 +174,16 @@ export default function NewDocumentModal({ open, onClose, projectId, userCountry
       </form>
     </Modal>
   )
+}
+
+function buildInitial(defaultFolder) {
+  return {
+    title: '',
+    drive_url: '',
+    category: INITIAL_CATEGORY,
+    folder: defaultFolder ?? folderForCategory(INITIAL_CATEGORY),
+    lot_id: '',
+  }
 }
 
 function Field({ label, required, children }) {

@@ -75,6 +75,24 @@ const MILESTONE_TYPE = {
   jalon_production: { label: 'Jalon production', badge: 'bg-amber-50 text-amber-700' },
 }
 
+const DOCUMENT_FOLDER = {
+  techno:   { label: 'Techno',   description: 'Livrables techniques, builds, specs' },
+  creation: { label: 'Création', description: 'Dossiers artistiques, scénarios, moodboards' },
+  texte:    { label: 'Texte',    description: 'Contrats, rapports, conventions' },
+  divers:   { label: 'Divers',   description: 'Factures et autres pièces' },
+}
+
+// Mapping category -> folder par défaut. Sert au pré-remplissage de la modal
+// "+ Nouveau document" et reste cohérent avec le commentaire de la migration 008.
+const CATEGORY_TO_FOLDER = {
+  technical_deliverable: 'techno',
+  artistic_dossier:      'creation',
+  scenario:              'creation',
+  contract:              'texte',
+  report:                'texte',
+  invoice:               'divers',
+}
+
 const MONTHS_FR = [
   'janvier', 'février', 'mars',     'avril',   'mai',      'juin',
   'juillet', 'août',    'septembre','octobre', 'novembre', 'décembre',
@@ -116,12 +134,21 @@ export function milestoneType(t) {
   return MILESTONE_TYPE[t] ?? { label: t, badge: 'bg-slate-100 text-slate-700' }
 }
 
+export function documentFolder(f) {
+  return DOCUMENT_FOLDER[f] ?? { label: f, description: '' }
+}
+
+export function folderForCategory(category) {
+  return CATEGORY_TO_FOLDER[category] ?? 'divers'
+}
+
 export const LOT_STATUS_OPTIONS = Object.keys(LOT_STATUS)
 export const DELIVERABLE_STATUS_OPTIONS = Object.keys(DELIVERABLE_STATUS)
 export const VALIDATION_STATUS_OPTIONS = Object.keys(VALIDATION_STATUS)
 export const DOCUMENT_CATEGORY_OPTIONS = Object.keys(DOCUMENT_CATEGORY)
 export const COUNTRY_OPTIONS = Object.keys(COUNTRY_FLAGS)
 export const MILESTONE_TYPE_OPTIONS = Object.keys(MILESTONE_TYPE)
+export const DOCUMENT_FOLDER_OPTIONS = Object.keys(DOCUMENT_FOLDER)
 
 // PG date columns (no time): force UTC parse to avoid timezone off-by-one
 // when client is west of UTC (e.g. America/Toronto would show 2026-06-14

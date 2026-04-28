@@ -24,6 +24,7 @@ export default function App() {
           <Route path="/lots" element={<Lots />} />
           <Route path="/lots/:id" element={<LotDetail />} />
           <Route path="/documents" element={<Documents />} />
+          <Route path="/documents/:folder" element={<Documents />} />
           <Route path="/livrables" element={<Livrables />} />
           <Route path="/budget" element={<Budget />} />
           <Route path="/equipe" element={<Equipe />} />
