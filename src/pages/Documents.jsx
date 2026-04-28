@@ -15,6 +15,9 @@ import {
   VALIDATION_STATUS_OPTIONS,
 } from '../lib/format'
 import NewDocumentModal from '../components/documents/NewDocumentModal.jsx'
+import CommentThread from '../components/comments/CommentThread.jsx'
+import CommentBadge from '../components/comments/CommentBadge.jsx'
+import { useCommentCounts } from '../components/comments/useCommentCounts.js'
 
 const PAGE_SIZE = 25
 
@@ -31,6 +34,8 @@ export default function Documents() {
   const [modalOpen, setModalOpen] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [actionError, setActionError] = useState(null)
+  const [expandedId, setExpandedId] = useState(null)
+  const [commentBump, setCommentBump] = useState(0)
 
   useEffect(() => {
     if (!projectId) return
@@ -93,6 +98,8 @@ export default function Documents() {
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
   const visibleDocs = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  const visibleIds = useMemo(() => visibleDocs.map(d => d.id), [visibleDocs])
+  const commentCounts = useCommentCounts(projectId, 'document', visibleIds, commentBump)
 
   function toggleSort(key) {
     setSort(prev => prev.key === key
@@ -166,6 +173,7 @@ export default function Documents() {
                   <SortHeader label="Statut" sortKey="validation_status" sort={sort} onClick={toggleSort} />
                   <SortHeader label="Modifié" sortKey="updated_at" sort={sort} onClick={toggleSort} />
                   <th className="px-3 py-2"></th>
+                  <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -176,6 +184,11 @@ export default function Documents() {
                     profile={profile}
                     accessLevel={accessLevel}
                     onAction={handleAction}
+                    commentCount={commentCounts.get(doc.id) ?? 0}
+                    expanded={expandedId === doc.id}
+                    onToggle={() => setExpandedId(prev => prev === doc.id ? null : doc.id)}
+                    projectId={projectId}
+                    onCommentChange={() => setCommentBump(b => b + 1)}
                   />
                 ))}
               </tbody>
@@ -285,7 +298,7 @@ function SortHeader({ label, sortKey, sort, onClick }) {
   )
 }
 
-function DocumentRow({ doc, profile, accessLevel, onAction }) {
+function DocumentRow({ doc, profile, accessLevel, onAction, commentCount, expanded, onToggle, projectId, onCommentChange }) {
   const v = validationStatus(doc.validation_status)
   const isMyCountry = profile?.country === doc.country
   const isAdmin = accessLevel === 'admin'
@@ -301,48 +314,73 @@ function DocumentRow({ doc, profile, accessLevel, onAction }) {
   }
 
   return (
-    <tr className="hover:bg-slate-50">
-      <td className="px-3 py-2 font-medium text-slate-900">
-        <div className="truncate">{doc.title}</div>
-      </td>
-      <td className="px-3 py-2">
-        <span className={`inline-flex rounded px-2 py-0.5 text-[11px] font-medium ${categoryBadgeClass(doc.category)}`}>
-          {documentCategory(doc.category)}
-        </span>
-      </td>
-      <td className="px-3 py-2 text-slate-600">
-        {doc.lot?.name ?? <span className="italic text-slate-400">Transversal</span>}
-      </td>
-      <td className="px-3 py-2">
-        <span title={countryName(doc.country)}>{countryFlag(doc.country)}</span>
-      </td>
-      <td className="px-3 py-2 text-slate-600">v{doc.version}</td>
-      <td className="px-3 py-2">
-        <span className={`inline-flex rounded px-2 py-0.5 text-[11px] font-medium ${toneClass(v.tone)}`}>
-          {v.label}
-        </span>
-      </td>
-      <td className="px-3 py-2 text-xs text-slate-400">{relativeTime(doc.updated_at)}</td>
-      <td className="px-3 py-2 whitespace-nowrap text-right">
-        {action ? (
+    <>
+      <tr className="hover:bg-slate-50">
+        <td className="px-3 py-2 font-medium text-slate-900">
+          <div className="truncate">{doc.title}</div>
+        </td>
+        <td className="px-3 py-2">
+          <span className={`inline-flex rounded px-2 py-0.5 text-[11px] font-medium ${categoryBadgeClass(doc.category)}`}>
+            {documentCategory(doc.category)}
+          </span>
+        </td>
+        <td className="px-3 py-2 text-slate-600">
+          {doc.lot?.name ?? <span className="italic text-slate-400">Transversal</span>}
+        </td>
+        <td className="px-3 py-2">
+          <span title={countryName(doc.country)}>{countryFlag(doc.country)}</span>
+        </td>
+        <td className="px-3 py-2 text-slate-600">v{doc.version}</td>
+        <td className="px-3 py-2">
+          <span className={`inline-flex rounded px-2 py-0.5 text-[11px] font-medium ${toneClass(v.tone)}`}>
+            {v.label}
+          </span>
+        </td>
+        <td className="px-3 py-2 text-xs text-slate-400">{relativeTime(doc.updated_at)}</td>
+        <td className="px-3 py-2">
           <button
             type="button"
-            onClick={() => onAction(doc, action.next)}
-            className="mr-2 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:border-brand-blue hover:text-brand-blue"
+            onClick={onToggle}
+            aria-expanded={expanded}
+            className="rounded px-1.5 py-1 hover:bg-slate-100"
+            title={expanded ? 'Masquer les commentaires' : 'Afficher les commentaires'}
           >
-            {action.label}
+            <CommentBadge count={commentCount} />
           </button>
-        ) : null}
-        <a
-          href={doc.drive_url}
-          target="_blank"
-          rel="noreferrer"
-          className="text-xs text-brand-blue hover:underline"
-        >
-          Drive ↗
-        </a>
-      </td>
-    </tr>
+        </td>
+        <td className="px-3 py-2 whitespace-nowrap text-right">
+          {action ? (
+            <button
+              type="button"
+              onClick={() => onAction(doc, action.next)}
+              className="mr-2 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:border-brand-blue hover:text-brand-blue"
+            >
+              {action.label}
+            </button>
+          ) : null}
+          <a
+            href={doc.drive_url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-brand-blue hover:underline"
+          >
+            Drive ↗
+          </a>
+        </td>
+      </tr>
+      {expanded ? (
+        <tr className="bg-slate-50/60">
+          <td colSpan={9} className="px-5 py-4">
+            <CommentThread
+              projectId={projectId}
+              entityType="document"
+              entityId={doc.id}
+              onCountChange={onCommentChange}
+            />
+          </td>
+        </tr>
+      ) : null}
+    </>
   )
 }
 

@@ -99,6 +99,7 @@ const ACTION_LABELS = {
   approved:  'a approuvé',
   archived:  'a archivé',
   added:     'a ajouté',
+  commented: 'a commenté',
 }
 
 const ENTITY_LABELS = {

@@ -13,6 +13,7 @@ import {
   toneClass,
   validationStatus,
 } from '../lib/format'
+import CommentThread from '../components/comments/CommentThread.jsx'
 
 export default function LotDetail() {
   const { id } = useParams()
@@ -164,6 +165,14 @@ export default function LotDetail() {
       ) : (
         <LotLivrables />
       )}
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <CommentThread
+          projectId={lot.project_id}
+          entityType="lot"
+          entityId={lot.id}
+        />
+      </section>
     </div>
   )
 }

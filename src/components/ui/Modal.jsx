@@ -1,6 +1,11 @@
 import { useEffect } from 'react'
 
-export default function Modal({ open, onClose, title, children }) {
+const SIZE_CLASSES = {
+  md: 'max-w-md',
+  lg: 'max-w-xl',
+}
+
+export default function Modal({ open, onClose, title, children, size = 'md' }) {
   useEffect(() => {
     if (!open) return
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -17,7 +22,7 @@ export default function Modal({ open, onClose, title, children }) {
       role="presentation"
     >
       <div
-        className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg"
+        className={`w-full ${SIZE_CLASSES[size] ?? SIZE_CLASSES.md} max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-lg`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

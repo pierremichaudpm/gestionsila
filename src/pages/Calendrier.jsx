@@ -12,6 +12,9 @@ import {
   MILESTONE_TYPE_OPTIONS,
 } from '../lib/format'
 import NewMilestoneModal from '../components/calendrier/NewMilestoneModal.jsx'
+import MilestoneDetailModal from '../components/calendrier/MilestoneDetailModal.jsx'
+import CommentBadge from '../components/comments/CommentBadge.jsx'
+import { useCommentCounts } from '../components/comments/useCommentCounts.js'
 
 export default function Calendrier() {
   const { projectId, accessLevel, loading: projectLoading } = useCurrentProject()
@@ -24,6 +27,8 @@ export default function Calendrier() {
   const [filters, setFilters] = useState({ country: 'all', type: 'all', lot: 'all' })
   const [modalOpen, setModalOpen] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+  const [detailMilestone, setDetailMilestone] = useState(null)
+  const [commentBump, setCommentBump] = useState(0)
 
   const canCreate = accessLevel === 'admin' || accessLevel === 'coproducer'
 
@@ -122,6 +127,12 @@ export default function Calendrier() {
     return Array.from(byMonth.entries())
   }, [filtered])
 
+  const milestoneIds = useMemo(
+    () => filtered.filter(i => i.source === 'milestone').map(i => i.id.replace(/^milestone-/, '')),
+    [filtered]
+  )
+  const milestoneCommentCounts = useCommentCounts(projectId, 'milestone', milestoneIds, commentBump)
+
   function updateFilter(key, value) {
     setFilters(prev => ({ ...prev, [key]: value }))
   }
@@ -162,7 +173,17 @@ export default function Calendrier() {
       ) : (
         <div className="space-y-8">
           {grouped.map(([monthKey, entries]) => (
-            <MonthSection key={monthKey} monthKey={monthKey} items={entries} lots={lots} />
+            <MonthSection
+              key={monthKey}
+              monthKey={monthKey}
+              items={entries}
+              lots={lots}
+              milestoneCommentCounts={milestoneCommentCounts}
+              onMilestoneClick={(milestoneId) => {
+                const m = milestones.find(x => x.id === milestoneId)
+                if (m) setDetailMilestone(m)
+              }}
+            />
           ))}
         </div>
       )}
@@ -178,6 +199,14 @@ export default function Calendrier() {
           setModalOpen(false)
           setReloadKey(k => k + 1)
         }}
+      />
+
+      <MilestoneDetailModal
+        milestone={detailMilestone}
+        lots={lots}
+        projectId={projectId}
+        onClose={() => setDetailMilestone(null)}
+        onCommentChange={() => setCommentBump(b => b + 1)}
       />
     </div>
   )
@@ -222,7 +251,7 @@ function FilterSelect({ label, value, onChange, children }) {
   )
 }
 
-function MonthSection({ monthKey, items, lots }) {
+function MonthSection({ monthKey, items, lots, milestoneCommentCounts, onMilestoneClick }) {
   const lotsById = Object.fromEntries(lots.map(l => [l.id, l]))
   return (
     <section>
@@ -233,39 +262,58 @@ function MonthSection({ monthKey, items, lots }) {
         {items.map(item => {
           const type = milestoneType(item.type)
           const lot = item.lotId ? lotsById[item.lotId] : null
+          const isMilestone = item.source === 'milestone'
+          const milestoneId = isMilestone ? item.id.replace(/^milestone-/, '') : null
+          const commentCount = isMilestone ? (milestoneCommentCounts.get(milestoneId) ?? 0) : 0
+          const Card = (
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm transition-colors group-hover:border-brand-blue group-hover:bg-slate-50">
+              <div className="flex flex-wrap items-baseline gap-3">
+                <span className="shrink-0 text-xs font-medium text-slate-500 tabular-nums">
+                  {formatDateOnly(item.date)}
+                </span>
+                <span className={`inline-flex shrink-0 rounded px-2 py-0.5 text-[11px] font-medium ${type.badge}`}>
+                  {type.label}
+                </span>
+                <span className="flex-1 text-sm font-medium text-slate-900">{item.title}</span>
+                {isMilestone ? (
+                  <CommentBadge count={commentCount} />
+                ) : null}
+                {item.country ? (
+                  <span title={countryName(item.country)} aria-label={countryName(item.country)}>
+                    {countryFlag(item.country)}
+                  </span>
+                ) : null}
+              </div>
+              {(item.context || lot || item.notes) ? (
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  {lot ? <span>{lot.name}</span> : null}
+                  {item.context && !lot ? <span>{item.context}</span> : null}
+                  {item.context && lot ? <span>· {item.context}</span> : null}
+                  {item.notes ? <span className="italic">— {item.notes}</span> : null}
+                  {item.source === 'deliverable' ? (
+                    <span className="ml-auto text-[11px] uppercase tracking-wide text-slate-400">livrable</span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          )
           return (
             <li key={item.id} className="relative">
               <span
                 className="absolute -left-[31px] top-3 inline-block h-3 w-3 rounded-full border-2 border-white bg-[color:var(--color-brand-navy)]"
                 aria-hidden="true"
               />
-              <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                <div className="flex flex-wrap items-baseline gap-3">
-                  <span className="shrink-0 text-xs font-medium text-slate-500 tabular-nums">
-                    {formatDateOnly(item.date)}
-                  </span>
-                  <span className={`inline-flex shrink-0 rounded px-2 py-0.5 text-[11px] font-medium ${type.badge}`}>
-                    {type.label}
-                  </span>
-                  <span className="flex-1 text-sm font-medium text-slate-900">{item.title}</span>
-                  {item.country ? (
-                    <span title={countryName(item.country)} aria-label={countryName(item.country)}>
-                      {countryFlag(item.country)}
-                    </span>
-                  ) : null}
-                </div>
-                {(item.context || lot || item.notes) ? (
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    {lot ? <span>{lot.name}</span> : null}
-                    {item.context && !lot ? <span>{item.context}</span> : null}
-                    {item.context && lot ? <span>· {item.context}</span> : null}
-                    {item.notes ? <span className="italic">— {item.notes}</span> : null}
-                    {item.source === 'deliverable' ? (
-                      <span className="ml-auto text-[11px] uppercase tracking-wide text-slate-400">livrable</span>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
+              {isMilestone ? (
+                <button
+                  type="button"
+                  onClick={() => onMilestoneClick(milestoneId)}
+                  className="group block w-full text-left"
+                >
+                  {Card}
+                </button>
+              ) : (
+                Card
+              )}
             </li>
           )
         })}

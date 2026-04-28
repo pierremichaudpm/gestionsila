@@ -13,6 +13,9 @@ import {
   toneClass,
 } from '../lib/format'
 import NewDeliverableModal from '../components/livrables/NewDeliverableModal.jsx'
+import CommentThread from '../components/comments/CommentThread.jsx'
+import CommentBadge from '../components/comments/CommentBadge.jsx'
+import { useCommentCounts } from '../components/comments/useCommentCounts.js'
 
 export default function Livrables() {
   const { projectId, loading: projectLoading } = useCurrentProject()
@@ -25,6 +28,8 @@ export default function Livrables() {
   const [reloadKey, setReloadKey] = useState(0)
   const [actionError, setActionError] = useState(null)
   const [modalFunder, setModalFunder] = useState(null)
+  const [expandedDeliverableId, setExpandedDeliverableId] = useState(null)
+  const [commentBump, setCommentBump] = useState(0)
 
   useEffect(() => {
     if (!projectId) return
@@ -81,6 +86,15 @@ export default function Livrables() {
     }
     return map
   }, [deliverables])
+
+  const allDeliverableIds = useMemo(() => deliverables.map(d => d.id), [deliverables])
+  const commentCounts = useCommentCounts(projectId, 'deliverable', allDeliverableIds, commentBump)
+  function toggleDeliverableExpanded(id) {
+    setExpandedDeliverableId(prev => prev === id ? null : id)
+  }
+  function handleCommentChange() {
+    setCommentBump(b => b + 1)
+  }
 
   function toggleOpen(id) {
     setOpenIds(prev => {
@@ -141,6 +155,11 @@ export default function Livrables() {
               onToggle={() => toggleOpen(f.id)}
               onAddDeliverable={() => setModalFunder(f)}
               onStatusChange={handleStatusChange}
+              commentCounts={commentCounts}
+              expandedDeliverableId={expandedDeliverableId}
+              onToggleExpanded={toggleDeliverableExpanded}
+              projectId={projectId}
+              onCommentChange={handleCommentChange}
             />
           ))}
         </div>
@@ -193,7 +212,7 @@ function ToggleButton({ active, onClick, children }) {
   )
 }
 
-function FunderAccordion({ funder, deliverables, open, onToggle, onAddDeliverable, onStatusChange }) {
+function FunderAccordion({ funder, deliverables, open, onToggle, onAddDeliverable, onStatusChange, commentCounts, expandedDeliverableId, onToggleExpanded, projectId, onCommentChange }) {
   const status = funderStatus(funder.status)
   return (
     <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -233,7 +252,16 @@ function FunderAccordion({ funder, deliverables, open, onToggle, onAddDeliverabl
           ) : (
             <ul className="divide-y divide-slate-100">
               {deliverables.map(d => (
-                <DeliverableRow key={d.id} deliverable={d} onStatusChange={onStatusChange} />
+                <DeliverableRow
+                  key={d.id}
+                  deliverable={d}
+                  onStatusChange={onStatusChange}
+                  commentCount={commentCounts.get(d.id) ?? 0}
+                  expanded={expandedDeliverableId === d.id}
+                  onToggleExpanded={() => onToggleExpanded(d.id)}
+                  projectId={projectId}
+                  onCommentChange={onCommentChange}
+                />
               ))}
             </ul>
           )}
@@ -252,25 +280,46 @@ function FunderAccordion({ funder, deliverables, open, onToggle, onAddDeliverabl
   )
 }
 
-function DeliverableRow({ deliverable, onStatusChange }) {
+function DeliverableRow({ deliverable, onStatusChange, commentCount, expanded, onToggleExpanded, projectId, onCommentChange }) {
   const days = daysUntil(deliverable.due_date)
   const overdue = days !== null && days < 0 && !['submitted', 'validated'].includes(deliverable.status)
   return (
-    <li className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
-      <span className="flex-1 font-medium text-slate-900">{deliverable.title}</span>
-      <span className={`text-xs ${overdue ? 'font-semibold text-red-600' : 'text-slate-500'}`}>
-        {formatDate(deliverable.due_date)}
-        {overdue ? ' (en retard)' : ''}
-      </span>
-      <select
-        value={deliverable.status}
-        onChange={(e) => onStatusChange(deliverable, e.target.value)}
-        className="rounded border border-slate-300 px-2 py-1 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
-      >
-        {DELIVERABLE_STATUS_OPTIONS.map(s => (
-          <option key={s} value={s}>{deliverableStatus(s).label}</option>
-        ))}
-      </select>
+    <li>
+      <div className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
+        <span className="flex-1 font-medium text-slate-900">{deliverable.title}</span>
+        <span className={`text-xs ${overdue ? 'font-semibold text-red-600' : 'text-slate-500'}`}>
+          {formatDate(deliverable.due_date)}
+          {overdue ? ' (en retard)' : ''}
+        </span>
+        <select
+          value={deliverable.status}
+          onChange={(e) => onStatusChange(deliverable, e.target.value)}
+          className="rounded border border-slate-300 px-2 py-1 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+        >
+          {DELIVERABLE_STATUS_OPTIONS.map(s => (
+            <option key={s} value={s}>{deliverableStatus(s).label}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={onToggleExpanded}
+          aria-expanded={expanded}
+          className="rounded px-1.5 py-1 hover:bg-slate-100"
+          title={expanded ? 'Masquer les commentaires' : 'Afficher les commentaires'}
+        >
+          <CommentBadge count={commentCount} />
+        </button>
+      </div>
+      {expanded ? (
+        <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-4">
+          <CommentThread
+            projectId={projectId}
+            entityType="deliverable"
+            entityId={deliverable.id}
+            onCountChange={onCommentChange}
+          />
+        </div>
+      ) : null}
     </li>
   )
 }
