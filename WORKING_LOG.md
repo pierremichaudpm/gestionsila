@@ -245,3 +245,63 @@ utilisateur Word pour Virginie.
    - Génération assistée de rapports avec IA
 6. **Code splitting éventuel** : `React.lazy()` sur Budget et Calendrier (les pages les plus gourmandes).
 7. **Transmettre `GUIDE_VIRGINIE.docx`** à Virginie par courriel ou Drive.
+
+## Session 2026-04-28 — Module commentaires contextuels (Phase 2.5) + auto-deploy
+
+### Objectif
+Ajouter une couche de discussion par entité métier dans l'app, sans dupliquer Discord ni les commentaires natifs de Drive. Activer l'auto-deploy Netlify.
+
+### Ce qui a été fait
+
+#### Module commentaires
+- [supabase/migrations/005_comments.sql](supabase/migrations/005_comments.sql) — table `comments` (id, project_id, entity_type, entity_id, user_id, content, created_at, updated_at), index composite `(project_id, entity_type, entity_id, created_at)`, RLS, trigger
+- `entity_type` ∈ `{document, deliverable, milestone, lot, budget_line}` — check constraint
+- RLS : SELECT pour tout membre du projet ; INSERT pour membres non-contractor (les contractors peuvent commenter uniquement sur les `documents` qu'ils ont uploadés — cohérent avec `documents_select`) ; UPDATE/DELETE limités à l'auteur (`user_id = auth.uid()`)
+- Trigger `comments_log_activity` : sur INSERT, résout le titre du parent (CASE sur entity_type, lookup dans documents/deliverables/milestones/lots/budget_lines), insère dans `activity_log` avec action `commented` et `metadata={title, excerpt}`
+
+#### Composants partagés
+- [src/components/comments/CommentThread.jsx](src/components/comments/CommentThread.jsx) — liste + form, avatar circulaire navy avec initiales, nom + organisation + timestamp relatif, bouton Supprimer si auteur, compteur en haut, callback `onCountChange` pour propager au parent
+- [src/components/comments/CommentBadge.jsx](src/components/comments/CommentBadge.jsx) — petite icône bulle + nombre, gris si 0
+- [src/components/comments/useCommentCounts.js](src/components/comments/useCommentCounts.js) — hook bulk qui fetch les counts pour une liste d'IDs en une seule requête, ré-exécute quand `bumpKey` change (parent l'incrémente après add/delete)
+- [src/components/calendrier/MilestoneDetailModal.jsx](src/components/calendrier/MilestoneDetailModal.jsx) — modal détail jalon (en-tête type/date/pays/lot/notes + thread)
+- `Modal` étendu avec prop `size="md"|"lg"` + `max-h-[90vh] overflow-y-auto` pour ne pas déborder du viewport
+
+#### Wiring sur les 5 pages
+- **Documents** : nouvelle colonne avec badge cliquable, expansion inline d'un fragment `<tr><td colSpan=9>` sous la ligne, état d'expansion `expandedId` dans Documents.jsx
+- **Livrables** : badge dans `DeliverableRow` (à droite du select de statut), expansion `<div>` sous la rangée flexbox, bypass de la vue calendrier (les deliverables apparaissent là sans badge — évite le doublon)
+- **Calendrier** : carte de jalon devient un `<button>`, clic ouvre `MilestoneDetailModal` (vs un thread inline). Les cartes de livrables ne sont PAS cliquables — déjà commentables dans Livrables, on évite le doublon visuel/fonctionnel
+- **LotDetail** : section commentaires en `<section>` après les onglets Documents/Livrables
+- **Budget** (3 vues) : badge cliquable + expansion partagée entre vues. État géré dans Budget.jsx, propagé aux 3 vues — un fil ouvert dans "Par coproducteur" reste ouvert si on bascule en "Consolidée". Pour `ByCoproducerView`, j'ai utilisé l'existante prop `extraCells` de `BudgetLineRow` pour injecter le `<td>` du badge sans dupliquer le composant ; `ConsolidatedView` et `ByLotView` ont leur row inline donc le badge est ajouté directement.
+
+#### RecentActivityBlock
+- Ajout du verbe `commented: 'a commenté'` dans `ACTION_LABELS` → "Pierre a commenté un document : Rapport SODEC Q1"
+
+#### Auto-deploy Netlify
+- Découvert via `netlify api getSite` que `build_settings` était vide et `repo_url: null` — le site était déployé manuellement via CLI à chaque session, pas auto-lié au repo GitHub. Ce qu'on prenait pour de l'auto-deploy, c'était moi qui re-pushait via `netlify deploy --prod` après chaque `git push`.
+- Repo lié dans le dashboard Netlify (`pierremichaudpm/gestionsila`, branche `main`)
+- Vérifié avec un push de test (commit `08183d14`) : Netlify a buildé en 12s, l'auto-deploy fonctionne maintenant à chaque push
+
+### Décisions techniques
+
+- **Pas de chat global, juste des commentaires contextuels** — Discord couvre déjà la conversation. Un chat dans l'app dupliquerait l'outil sans le remplacer (pas de notifs mobiles, pas de fils, pas de vocal). Les commentaires attachés à une entité, eux, ont une vraie raison d'exister : ils restent avec la chose dont on parle.
+- **Pas de commentaires sur les fichiers Google Drive** — Drive a déjà ce feature nativement (avec mentions, résolution, threading). Les commentaires de notre app sont uniquement sur les **fiches métadonnées** (la fiche `documents` côté Supabase, pas le fichier sur Drive).
+- **Trigger SQL plutôt que insert client dans `activity_log`** — cohérent avec la stratégie déjà appliquée pour documents/deliverables/milestones/budget_lines (migration 004). Le trigger résout le titre du parent en SQL via un CASE sur entity_type → un seul aller-retour réseau côté client.
+- **`action='commented'` avec `entity_type` du parent** (vs `entity_type='comment'`) — permet à `RecentActivityBlock` de réutiliser sa logique existante (`a commenté` + `un document`/`un livrable`/etc.) sans handling spécial pour les commentaires.
+- **Contractor RLS strict** : les prestataires ne peuvent commenter QUE sur les documents qu'ils ont uploadés (pas sur d'autres entités). C'est cohérent avec leur SELECT sur documents (`uploaded_by = auth.uid()`). Pour Phase 2.5, l'UI ne masque pas le formulaire — un contractor qui essaierait de commenter sur un milestone se prendrait juste l'erreur RLS. Acceptable car les contractors ne voient même pas le Calendrier/Budget en pratique.
+- **État d'expansion partagé entre les 3 vues du Budget** — un seul `expandedLineId` au niveau Budget.jsx, passé en prop aux 3 vues. Avantage : si tu ouvres un fil en "Par coproducteur" et bascules en "Consolidée", il reste ouvert. La même ligne apparaît dans toutes les vues (juste organisée différemment).
+- **`useCommentCounts` avec `idsKey` joiné/trié** : le hook se ré-exécute quand l'ensemble des IDs change. Construire la dépendance comme `[...ids].sort().join(',')` permet à React de comparer en `===` strict — sinon le tableau créé à chaque render relancerait la requête en boucle.
+- **Modal avec `size` prop** : avant, tous les modals étaient `max-w-md` (28rem). Pour `MilestoneDetailModal` qui contient un thread, j'ai ajouté `size="lg"` (`max-w-xl`). J'ai aussi ajouté `max-h-[90vh] overflow-y-auto` à tous les modals — bénéfice gratuit, évite que les modaux longs débordent du viewport.
+
+### Problèmes rencontrés
+
+- **L'auto-deploy Netlify n'était pas branché malgré l'illusion qu'il l'était.** Symptôme : après `git push`, le bundle live n'avait pas les nouveaux commentaires. Diagnostic via l'API Netlify (`netlify api getSite`) : `build_settings: {}`, `repo_url: null`, `deploy_source: api` sur tous les deploys passés. Solution : Virginie/Pierre a re-lié le repo dans le dashboard Netlify pendant la session. Première étape du diagnostic à retenir : vérifier `deploy_source: github` vs `api` quand on doute qu'une push a déclenché un build.
+- **Import accidentel en bas de fichier** dans ConsolidatedView.jsx — j'ai mis `import { Fragment } from 'react'` sous l'export par habitude (l'import était nécessaire à cause de l'ajout de `<Fragment key={line.id}>` pour wrapper la row + sa row d'expansion). ESLint/Vite n'aurait pas pardonné. Corrigé immédiatement, à surveiller dans le futur.
+- **Migration 005 conflit potentiel avec ma promesse de "005 éventuelle pour lots↔milestones"** dans le précédent CLAUDE.md. La migration de jointure passe en 006 si on la fait — j'ai mis à jour CLAUDE.md.
+
+### Prochaines étapes
+
+1. **Tester avec Virginie** — première vraie utilisation du module. Voir si le comportement "thread expand inline" est intuitif sur la page Documents (table dense) ou si un modal détail serait plus lisible.
+2. **Hide form pour contractors** sur les entity_types qu'ils ne peuvent pas commenter (milestones, deliverables, lots, budget_lines). Aujourd'hui le formulaire s'affiche et l'erreur RLS arrive après le submit. Détection client : `accessLevel === 'contractor' && entityType !== 'document'` → hide.
+3. **Notifications email** sur nouveau commentaire (Phase 3, Resend). Cas d'usage prioritaire pour la coproduction internationale.
+4. **Vrais emails équipe** — toujours en placeholders sauf Virginie et Pierre. À corriger côté seed et DB live quand Virginie fournit la liste finale.
+5. **Migration 006** (si jamais) : jointure `lots ↔ milestones` exposée correctement, et `deliverable_documents` pour la fonctionnalité "documents liés" du spec Livrables (toujours non câblée).

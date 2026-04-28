@@ -8,7 +8,7 @@ Outil de gestion de production pour coproductions internationales. Première ins
 **Budget Phase 1 :** 3 500 $ CAD
 **Deadline :** Opérationnel mi-mai 2026
 
-## État d'avancement (2026-04-27)
+## État d'avancement (2026-04-28)
 
 **Phase 1 ✓ — déployée en prod : [https://gestion-sila.netlify.app](https://gestion-sila.netlify.app)**
 - Auth flow complet : AuthProvider context, ProtectedRoute, page Login, profil + logout dans la sidebar
@@ -23,11 +23,22 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - **M4 Budget** : 3 vues (par coproducteur avec édition inline, consolidée admin avec conversion CAD/EUR, par lot), taux EUR→CAD fixe modifiable par admin, conversion calculée client-side
 - **M6 Dashboard** : 4 blocs aggrégent les nouvelles données (milestones dans Attention et Lots count, fusion deliverables+milestones dans Échéances), `activity_log` alimenté automatiquement par triggers PostgreSQL
 
+**Phase 2.5 ✓ — module commentaires contextuels (déployée)**
+- Fils de discussion attachés aux entités métier (document, deliverable, milestone, lot, budget_line). Pas de chat global — Discord reste l'outil de conversation, Drive garde ses commentaires sur les fichiers.
+- Composant réutilisable `<CommentThread>` + badge cliquable `<CommentBadge>` + hook bulk `useCommentCounts`
+- Câblé sur 5 pages : Documents (expansion inline), Livrables (expansion inline), Calendrier (modal détail jalon), Lots (section bas de page), Budget sur ses 3 vues (Par coproducteur / Consolidée / Par lot — état d'expansion partagé)
+- Trigger PostgreSQL `log_comment_activity` qui résout le titre du parent et insère dans `activity_log` avec action `commented` → s'affiche dans "Activité récente" du dashboard
+- Pas de mentions @user, pas d'édition (suppression seulement par l'auteur), pas de threads imbriqués, pas de notifications email — repoussés en Phase 3
+
 **Migrations**
 - 001 — schéma initial (11 tables, RLS, helpers SECURITY DEFINER)
 - 002 — `project_settings` (taux change) + RLS budget_lines élargie pour coproducer
 - 003 — table `milestones` (timeline calendrier)
 - 004 — triggers `activity_log` (anti-noise : INSERT toujours, UPDATE filtré sur champs significatifs)
+- 005 — table `comments` + RLS (lecture membres, insert sauf contractor sauf sur ses propres docs, update/delete auteur) + trigger activity_log
+
+**Hosting**
+- Auto-deploy GitHub → Netlify activé depuis 2026-04-28 (lien repo dans Netlify dashboard, branche `main`, ~12s de build par push)
 
 **Design appliqué**
 - Sidebar 320px navy avec 3 logos circulaires 88px (Poulpe Bleu en `object-cover`, autres en `object-contain` padding 10px), titre "SILA / Héroïnes Arctiques" sur 2 lignes en `text-2xl bold`
@@ -40,11 +51,12 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - 7 autres utilisateurs encore en placeholders (Mathieu, Marie, William, Hélène, Anne-Lise, Raphaël, Antoine) — à corriger avant la mise en prod réelle
 
 **Phase 3 — non planifiée, non chiffrée**
-- Notifications email Resend (rappels échéances, validations en attente)
+- Notifications email Resend (rappels échéances, validations en attente, nouveaux commentaires)
 - Exports PDF (état d'avancement par bailleur, mise en page propre pour SODEC/CNC)
 - Génération assistée de rapports avec IA
 - Page Paramètres (config Discord URL, gestion équipe depuis l'UI, catégories documents personnalisables)
-- Migration 005 éventuelle pour lier lots ↔ milestones et deliverables ↔ documents (jonctions actuellement absentes)
+- Module commentaires : mentions @user, édition de commentaire, threads imbriqués
+- Migration 006 éventuelle pour lier lots ↔ milestones et deliverables ↔ documents (jonctions actuellement absentes)
 
 **Documentation client**
 - `GUIDE_VIRGINIE.docx` (16 pages, palette navy/accent) — guide d'accompagnement non committé, à transmettre par courriel
