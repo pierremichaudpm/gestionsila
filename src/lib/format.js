@@ -82,6 +82,11 @@ const DOCUMENT_FOLDER = {
   divers:   { label: 'Divers',   description: 'Factures et autres pièces' },
 }
 
+const PRODUCER_FOLDER = {
+  assurances: { label: 'Assurances', description: 'Polices, attestations, sinistres' },
+  legal:      { label: 'Légal',      description: 'Contrats de production, conventions, juridique' },
+}
+
 // Mapping category -> folder par défaut. Sert au pré-remplissage de la modal
 // "+ Nouveau document" et reste cohérent avec le commentaire de la migration 008.
 const CATEGORY_TO_FOLDER = {
@@ -138,6 +143,10 @@ export function documentFolder(f) {
   return DOCUMENT_FOLDER[f] ?? { label: f, description: '' }
 }
 
+export function producerFolder(f) {
+  return PRODUCER_FOLDER[f] ?? { label: f, description: '' }
+}
+
 export function folderForCategory(category) {
   return CATEGORY_TO_FOLDER[category] ?? 'divers'
 }
@@ -149,6 +158,7 @@ export const DOCUMENT_CATEGORY_OPTIONS = Object.keys(DOCUMENT_CATEGORY)
 export const COUNTRY_OPTIONS = Object.keys(COUNTRY_FLAGS)
 export const MILESTONE_TYPE_OPTIONS = Object.keys(MILESTONE_TYPE)
 export const DOCUMENT_FOLDER_OPTIONS = Object.keys(DOCUMENT_FOLDER)
+export const PRODUCER_FOLDER_OPTIONS = Object.keys(PRODUCER_FOLDER)
 
 // PG date columns (no time): force UTC parse to avoid timezone off-by-one
 // when client is west of UTC (e.g. America/Toronto would show 2026-06-14

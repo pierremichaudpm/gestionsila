@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthProvider.jsx'
+import { useCurrentProject } from '../../lib/useCurrentProject.js'
 
 const NAV_ITEMS = [
   { to: '/production', label: 'Dashboard' },
@@ -7,8 +8,13 @@ const NAV_ITEMS = [
   { to: '/lots', label: 'Tableaux' },
   { to: '/documents', label: 'Documents' },
   { to: '/livrables', label: 'Livrables' },
-  { to: '/budget', label: 'Budget' },
   { to: '/equipe', label: 'Équipe' },
+]
+
+const PRODUCER_NAV_ITEMS = [
+  { to: '/espace-producteurs/assurances', label: 'Assurances' },
+  { to: '/espace-producteurs/legal',      label: 'Légal' },
+  { to: '/espace-producteurs/budget',     label: 'Budget' },
 ]
 
 const DISCORD_URL = '#'
@@ -23,6 +29,7 @@ const linkClass = ({ isActive }) =>
 
 export default function Sidebar() {
   const { profile, user, signOut } = useAuth()
+  const { hasProducerAccess } = useCurrentProject()
   const navigate = useNavigate()
 
   async function handleSignOut() {
@@ -53,6 +60,20 @@ export default function Sidebar() {
             {item.label}
           </NavLink>
         ))}
+
+        {hasProducerAccess ? (
+          <div className="mt-5 border-t border-white/10 pt-3">
+            <div className="flex items-center gap-2 px-4 pb-2 text-[11px] uppercase tracking-wide text-slate-300">
+              <LockIcon />
+              <span>Espace Producteurs</span>
+            </div>
+            {PRODUCER_NAV_ITEMS.map(item => (
+              <NavLink key={item.to} to={item.to} className={linkClass}>
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
+        ) : null}
       </nav>
 
       <div className="space-y-1 px-3 py-3">
@@ -113,6 +134,14 @@ function DiscordIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M20.317 4.369A19.79 19.79 0 0 0 16.558 3.2a.074.074 0 0 0-.079.037c-.34.6-.717 1.385-.98 2.003a18.27 18.27 0 0 0-5.487 0 12.51 12.51 0 0 0-.997-2.003.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 5.18 4.369a.07.07 0 0 0-.032.027C2.49 8.226 1.834 11.985 2.158 15.7a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.077.077 0 0 0 .084-.027c.462-.63.873-1.295 1.226-1.994a.076.076 0 0 0-.041-.105 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.927 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.009c.12.099.246.198.372.292a.077.077 0 0 1-.006.128c-.598.349-1.22.645-1.873.891a.077.077 0 0 0-.04.106c.36.7.772 1.364 1.225 1.994a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .031-.055c.5-4.255-.838-7.984-3.549-11.304a.061.061 0 0 0-.031-.028zM8.02 13.464c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.418 2.157-2.418 1.21 0 2.176 1.094 2.157 2.418 0 1.334-.956 2.419-2.157 2.419zm7.974 0c-1.182 0-2.156-1.085-2.156-2.419 0-1.333.955-2.418 2.156-2.418 1.21 0 2.176 1.094 2.157 2.418 0 1.334-.946 2.419-2.157 2.419z"/>
+    </svg>
+  )
+}
+
+function LockIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <path d="M3 5V3.5a3 3 0 1 1 6 0V5m-6 0h6a1 1 0 0 1 1 1v3.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
