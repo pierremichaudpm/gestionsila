@@ -8,22 +8,46 @@ Outil de gestion de production pour coproductions internationales. Première ins
 **Budget Phase 1 :** 3 500 $ CAD
 **Deadline :** Opérationnel mi-mai 2026
 
-## État d'avancement (2026-04-22)
+## État d'avancement (2026-04-27)
 
-**Fait :**
-- Scaffold React 19 / Vite 6 / Tailwind v4 / React Router 7 / Supabase client
-- Repo GitHub public : https://github.com/pierremichaudpm/gestionsila
-- Config Netlify (netlify.toml) prête pour déploiement
-- Layout + sidebar navy + 6 routes (5 placeholder + Production)
-- Schéma SQL complet (11 tables) + RLS + helpers `SECURITY DEFINER` : [supabase/migrations/001_schema.sql](supabase/migrations/001_schema.sql)
-- Seed dev SILA (project, orgs, équipes, lots, bailleurs) : [supabase/seed.sql](supabase/seed.sql)
-- Page Production complète avec les 4 blocs du spec, fetch Supabase réel, skeletons, empty states
+**Phase 1 ✓ — déployée en prod : [https://gestion-sila.netlify.app](https://gestion-sila.netlify.app)**
+- Auth flow complet : AuthProvider context, ProtectedRoute, page Login, profil + logout dans la sidebar
+- Connexion Supabase live (project ref `qqyrqiqnvsvzxqqukcjv`, East US Ohio), migration + seed appliqués
+- 5 pages CRUD : Lots (liste + détail onglets), Documents (table triable + 4 filtres + modal + workflow validation), Livrables (accordéon par bailleur + vue calendrier), Équipe (annuaire par org), Production (dashboard 4 blocs)
+- Discord link dans la sidebar (placeholder `href="#"`), à brancher dans Paramètres en Phase 3
+- 3 logos coproducteurs (JAXA / Dark Euphoria / Poulpe Bleu) en cercles dans la sidebar
+- Composant Modal partagé (Esc + click outside)
 
-**En attente :**
-- Config Supabase (projet cloud, migration, seed, `.env.local`) — prévu 2026-04-23
-- Auth flow (page login, session management)
-- Pages Lots / Documents / Livrables / Équipe / Paramètres (actuellement placeholders)
-- Déploiement Netlify
+**Phase 2 ✓ — déployée**
+- **M2 Calendrier** : timeline verticale unifiée (jalons + livrables fusionnés), regroupée par mois, badges colorés par type, filtres pays/type/lot, modal "+ Jalon" (admin libre, coproducer figé sur son pays)
+- **M4 Budget** : 3 vues (par coproducteur avec édition inline, consolidée admin avec conversion CAD/EUR, par lot), taux EUR→CAD fixe modifiable par admin, conversion calculée client-side
+- **M6 Dashboard** : 4 blocs aggrégent les nouvelles données (milestones dans Attention et Lots count, fusion deliverables+milestones dans Échéances), `activity_log` alimenté automatiquement par triggers PostgreSQL
+
+**Migrations**
+- 001 — schéma initial (11 tables, RLS, helpers SECURITY DEFINER)
+- 002 — `project_settings` (taux change) + RLS budget_lines élargie pour coproducer
+- 003 — table `milestones` (timeline calendrier)
+- 004 — triggers `activity_log` (anti-noise : INSERT toujours, UPDATE filtré sur champs significatifs)
+
+**Design appliqué**
+- Sidebar 320px navy avec 3 logos circulaires 88px (Poulpe Bleu en `object-cover`, autres en `object-contain` padding 10px), titre "SILA / Héroïnes Arctiques" sur 2 lignes en `text-2xl bold`
+- Fond crème vintage `#f1e2bc` avec grain SVG (`feTurbulence baseFrequency=0.7`, brun à 28% d'alpha)
+- Footer "Propulsé par Studio Micho · Jaxa" sur toutes les pages protégées
+- Sidebar nav : `Production` renommé `Dashboard`
+
+**Données**
+- Emails réels : `virginiejaffredo@jaxa.ca` (Virginie, admin) et `pierre.michaud@jaxa.ca` (Pierre Michaud — Dev outils, remplace Axelle dans le seed)
+- 7 autres utilisateurs encore en placeholders (Mathieu, Marie, William, Hélène, Anne-Lise, Raphaël, Antoine) — à corriger avant la mise en prod réelle
+
+**Phase 3 — non planifiée, non chiffrée**
+- Notifications email Resend (rappels échéances, validations en attente)
+- Exports PDF (état d'avancement par bailleur, mise en page propre pour SODEC/CNC)
+- Génération assistée de rapports avec IA
+- Page Paramètres (config Discord URL, gestion équipe depuis l'UI, catégories documents personnalisables)
+- Migration 005 éventuelle pour lier lots ↔ milestones et deliverables ↔ documents (jonctions actuellement absentes)
+
+**Documentation client**
+- `GUIDE_VIRGINIE.docx` (16 pages, palette navy/accent) — guide d'accompagnement non committé, à transmettre par courriel
 
 **Journal complet :** voir [WORKING_LOG.md](WORKING_LOG.md).
 

@@ -134,3 +134,114 @@ fonctionnelle (tableau de contrôle). Config Supabase effective remise au lendem
    chaque mutation (document créé, statut changé, etc.)
 6. **Déploiement Netlify** : connecter le repo, env vars Supabase, DNS
 7. **Phase 2** : Gantt (M2), Budget (M4), Dashboards (M6), exports PDF
+
+
+## Session 2026-04-27 — Phase 1 + Phase 2 livrées, déployées en prod
+
+### Objectif
+Reprendre depuis le scaffold du 2026-04-22, configurer Supabase live, livrer
+toute la Phase 1 (auth + 5 pages CRUD), enchaîner avec Phase 2 (Calendrier,
+Budget, Dashboard agrégé), déployer sur Netlify avec connexion réelle aux
+données. Polish design (logos, fond vintage, sidebar) + livrer un guide
+utilisateur Word pour Virginie.
+
+### Ce qui a été fait
+
+#### Configuration Supabase live
+- Install CLI 2.95.4, `supabase login`, `supabase link --project-ref qqyrqiqnvsvzxqqukcjv`
+- `supabase db push` → migration 001 appliquée
+- Seed appliqué via `psql` direct sur le pooler (`.temp/pooler-url`) — `db seed` ne marche pas pour les projets cloud
+- Récupération anon key + URL via `supabase projects api-keys`, `.env.local` créé et gitignored
+
+#### Auth flow (Phase 1)
+- `AuthProvider` context + `useAuth` hook (session via `onAuthStateChange`, profile via `public.users`)
+- `ProtectedRoute` avec redirect `/login` + `state.from`
+- Page Login avec gestion d'erreur inline et redirect post-login
+- Sidebar : profil + bouton logout en bas
+
+#### Phase 1 — pages CRUD livrées
+- **Lots** : grid de cards + page détail `/lots/:id` avec status modifiable selon le pays + onglets Documents (réel) / Livrables (placeholder, schéma manque le lien lot↔livrable)
+- **Documents** : table sortable, 4 filtres combinables, pagination 25, modal "+ Nouveau document" avec auto-incrément version, workflow Soumettre/Approuver/Archiver conditionné par rôle + pays
+- **Livrables** : accordéon par bailleur, dropdowns statut, modal "+ Livrable", toggle vue Calendrier
+- **Équipe** : annuaire groupé par organisation
+- Composant `Modal` partagé (Esc + click outside), Discord link sidebar (placeholder)
+
+#### GitHub + Netlify
+- Push initial Phase 1 — `feat: pages...` (24 fichiers, +3425/-47)
+- `netlify sites:create --account-slug pmicho` (le `--name` seul ne suffit pas)
+- Env vars `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` posées via CLI
+- `netlify deploy --prod --build` → https://gestion-sila.netlify.app
+- Auto-deploy GitHub : pas configuré (étape UI à faire séparément)
+
+#### Phase 2 — M4 Budget
+- Migration 002 : table `project_settings` (taux EUR→CAD fixe par projet), drop+create de `budget_lines_select` pour que coproducer voie tous les budgets
+- Page Budget avec 3 vues : par coproducteur (édition inline), consolidée (admin only, conversion CAD/EUR avec totaux 4 cellules), par lot
+- `BudgetLineRow` : inputs save-on-blur, optimistic updates avec rollback si Supabase rejette
+- 11 lignes seed (JAXA 4 lignes CAD, DE 4 EUR, PB 3 EUR), taux 1 EUR = 1.50 CAD
+
+#### Phase 2 — M2 Calendrier
+- Migration 003 : table `milestones` (id, project_id, lot_id, title, date, type, country, notes, created_by) avec RLS admin (any country) / coproducer (own country)
+- Page Calendrier : timeline verticale groupée par mois, rail navy avec puces, badges colorés par type
+- Source fusionnée : `milestones` + `deliverables.due_date` (livrables typés `depot_fonds`)
+- 3 filtres pays/type/lot, modal "+ Jalon" (admin libre, coproducer figé sur son pays)
+- `formatDateOnly` + `formatMonth` ajoutés à `format.js` (TZ-safe pour colonnes PG `date`)
+- Seed : 6 milestones + 5 deliverables datés
+
+#### Phase 2 — M6 Dashboard agrégé
+- Migration 004 : function `log_activity()` + 4 triggers AFTER INSERT/UPDATE
+- Anti-noise : INSERT toujours loggué ; UPDATE filtré (documents seulement quand `validation_status` change ; deliverables sur `status` ; milestones sur `title`/`date` ; budget_lines pas du tout)
+- 4 blocs Production refaits : Attention ajoute milestones ≤14j ; Lots affiche `docs+jalons` count ; Upcoming fusionne deliverables+milestones top 10 avec badges type ; Activity ajoute `milestone` aux ENTITY_LABELS
+
+#### Email + équipe
+- Virginie Jaffredo : email réel `virginiejaffredo@jaxa.ca` (était `virginie@jaxaproduction.com` placeholder)
+- Pierre Michaud (Dev outils JAXA) remplace Axelle Michaud dans le seed (DB live + seed.sql)
+- Mémoire projet créée : `project_seed_emails.md` (les 7 autres utilisateurs restent en placeholders)
+
+#### Design polish (multiples itérations)
+- Sidebar : 240→280→320px ; logos 48→72→88px ; padding 6→8→10px ; gap 10→10→12px
+- Logos : Poulpe Bleu en `object-cover` (le JPG a des coins blancs qu'il faut clipper au cercle), JAXA + Dark Euphoria en `object-contain` avec padding (PNGs transparents)
+- Sidebar : "Production" → "Dashboard" en label, titre `text-2xl bold` sur 2 lignes ("SILA" / "Héroïnes Arctiques"), logos déplacés au-dessus du titre
+- Nav : `px-3 py-2 text-sm` → `px-4 py-2.5 text-[15px]` (plus aérée pour la nouvelle largeur)
+- Bloc utilisateur : tailles de texte bumpées (`text-base` pour le nom, `text-sm` pour pays/bouton)
+- Fond : crème vintage `#f1e2bc` + SVG noise `feTurbulence baseFrequency=0.7` à 28% d'alpha tinté brun, Layout/Login passés en transparent pour laisser le grain transparaître
+- Footer "Propulsé par Studio Micho · Jaxa" sur toutes les pages protégées
+- Entêtes section H2 : `text-xs` → `text-sm` (+17%)
+
+#### Documentation client
+- `GUIDE_VIRGINIE.docx` (16 pages) généré via python-docx — couverture, vue d'ensemble, page dédiée par module, permissions, premiers pas, Discord, contact, mention Phase 3
+- Palette navy/accent, polices Arial, callouts crème, tableau permissions
+- Non committé (livrable client à transmettre par courriel/Drive)
+
+### Décisions techniques
+
+- **`psql` vs `supabase db seed`** : `db seed` ne marche pas pour les projets cloud (que pour Docker local). Utilisation directe du pooler URL (`.temp/pooler-url`) avec `psql -v ON_ERROR_STOP=1` pour les inserts.
+- **Triggers activity_log avec filtres anti-noise** : sur UPDATE, on ne logge que les transitions de champs « significatifs ». Sinon l'édition inline du Budget polluerait le journal. Documents → transitions `validation_status`. Deliverables → changements `status`. Milestones → `title` ou `date`. Budget_lines → INSERT seulement.
+- **Inline editing du Budget** : drafts en state local par row, save-on-blur, optimistic update au niveau parent avec rollback si Supabase rejette. Modal seulement pour la création (et même la création est un INSERT direct avec valeurs par défaut, l'utilisateur édite ensuite inline).
+- **JPG vs PNG dans cercle clippé** : Poulpe Bleu (JPG avec coins blancs) → `object-cover` sans padding pour que les coins blancs sortent du cercle (clippés par `overflow-hidden + rounded-full`). JAXA + Dark Euphoria (PNG transparents) → `object-contain` avec padding 10px pour respecter leur marge naturelle.
+- **Fond vintage SVG inline** : `feTurbulence` data-URI (`baseFrequency=0.7` pour gros grain, `numOctaves=2`, alpha 28%, tint brun via `feColorMatrix`). Layout et Login passés en transparent pour que le body grain transparaisse.
+- **`formatDateOnly`** : les colonnes PG `date` (sans heure) parsées avec `new Date('2026-06-15')` donnent UTC midnight, ce qui s'affiche comme la veille en zone CA. Helper dédié qui force `Date.UTC(y, m-1, d)` + `timeZone='UTC'` pour le `toLocaleDateString`.
+- **Sidebar 320px** : 88×3 + 12×2 = 288 + padding (px-4 = 32) = 320 → fit exact. Le bloc titre passe en `px-4` alors que la nav reste à `px-3` pour préserver le rythme visuel.
+- **Permissions UI vs RLS** : on cache les boutons côté UI selon le rôle/pays, mais la RLS rejette aussi côté serveur. Les deux couches doivent rester cohérentes — toute modif d'autorisation doit toucher les deux.
+- **Convention de nommage migrations** : `001_schema.sql` → non standard Supabase (`YYYYMMDDHHmmss_name.sql`), mais accepté par le CLI comme version « 001 ». Toutes les migrations suivantes (002, 003, 004) ont gardé cette convention pour cohérence — tri lexicographique reste correct.
+
+### Problèmes rencontrés
+
+- `supabase sites:create --name <x>` réclame le team slug en interactif → ajouter `--account-slug pmicho` pour automatiser.
+- Vite a affiché une erreur HMR transitoire pendant l'écriture séquentielle de `Livrables.jsx` + `NewDeliverableModal.jsx` (race entre les writes). Auto-résolu au prochain HMR. Leçon : écrire les fichiers importés avant les fichiers qui les importent, ou batcher en parallèle.
+- `python-docx` 1.2 : `add_break(6)` lève `KeyError` car l'enum n'accepte pas les ints littéraux. Importer `WD_BREAK` depuis `docx.enum.text` et passer `WD_BREAK.PAGE`.
+- Bundle Vite > 500 ko (warning code-splitting). Ignoré pour l'instant — chargement initial reste rapide via gzip (~145 ko). Optimisation possible avec `React.lazy()` si besoin futur.
+- Schéma manquant : pas de table de jointure entre `lots` et `milestones` (l'onglet Livrables d'un lot affiche un placeholder), ni entre `deliverables` et `documents` (la fonctionnalité "documents liés" du spec Livrables est repoussée).
+- Logos déposés dans `logos/` se restagent à chaque `git add -A` — j'ai utilisé `git reset HEAD logos/` à plusieurs reprises pour ne pas les committer (les vrais maîtres servis par l'app sont dans `public/logos/`).
+
+### Prochaines étapes
+
+1. **Auto-deploy GitHub via Netlify UI** : connecter le repo dans Netlify Settings → Continuous Deployment pour que `git push` redéploie automatiquement.
+2. **Vrais emails équipe** : Mathieu, Marie, William, Hélène, Anne-Lise, Raphaël, Antoine sont en placeholders. À corriger seed + DB live quand Virginie fournit la liste.
+3. **Page Paramètres** : actuellement placeholder vide. À construire pour configurer le lien Discord, gérer l'équipe (admin invite/édit/supprime), choisir des catégories de documents personnalisées.
+4. **Migration 005 éventuelle** : ajouter table de jointure `lot_milestones` (ou colonne `milestones.lot_id` déjà là, donc juste exposer correctement) + table `deliverable_documents` pour la fonctionnalité "documents liés" du spec Livrables.
+5. **Phase 3 (à chiffrer si Virginie valide)** :
+   - Notifications email Resend (rappels échéances, validation en attente)
+   - Exports PDF (état d'avancement par bailleur, mise en page propre pour SODEC/CNC)
+   - Génération assistée de rapports avec IA
+6. **Code splitting éventuel** : `React.lazy()` sur Budget et Calendrier (les pages les plus gourmandes).
+7. **Transmettre `GUIDE_VIRGINIE.docx`** à Virginie par courriel ou Drive.
