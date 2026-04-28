@@ -202,12 +202,12 @@ function FootDual({ amount, currency, rates }) {
   const native = `${Number(amount).toLocaleString('fr-FR')} ${currency}`
   const targetCurrency = currency === 'CAD' ? 'EUR' : 'CAD'
   const rate = currency === 'EUR' ? rates?.eurToCad : rates?.cadToEur
-  if (!rate) return <span>{native}</span>
+  if (!rate) return <span className="text-base font-semibold text-slate-900">{native}</span>
   const derived = Number(amount) * Number(rate)
   return (
     <div className="flex flex-col items-end">
-      <span>{native}</span>
-      <span className="text-[10px] tabular-nums text-slate-400">
+      <span className="text-base font-semibold tabular-nums text-slate-900">{native}</span>
+      <span className="text-xs tabular-nums text-slate-500">
         {Number(derived).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} {targetCurrency}
       </span>
     </div>

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useCurrentProject } from '../lib/useCurrentProject'
 import { useAuth } from '../lib/AuthProvider.jsx'
@@ -7,6 +6,7 @@ import ByCoproducerView from '../components/budget/ByCoproducerView.jsx'
 import ConsolidatedView from '../components/budget/ConsolidatedView.jsx'
 import ByLotView from '../components/budget/ByLotView.jsx'
 import StructureFinanciereView from '../components/budget/StructureFinanciereView.jsx'
+import EditRatesModal from '../components/parametres/EditRatesModal.jsx'
 import { useCommentCounts } from '../components/comments/useCommentCounts.js'
 
 export default function Budget() {
@@ -21,6 +21,7 @@ export default function Budget() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [view, setView] = useState('byCoproducer')
+  const [rateModalOpen, setRateModalOpen] = useState(false)
   const [actionError, setActionError] = useState(null)
   const [expandedLineId, setExpandedLineId] = useState(null)
   const [commentBump, setCommentBump] = useState(0)
@@ -147,7 +148,7 @@ export default function Budget() {
         </div>
         <div className="flex flex-col items-end gap-2">
           <ViewToggle value={view} onChange={setView} isAdmin={isAdmin} />
-          <RateBadge rates={rates} />
+          <RateBadge rates={rates} isAdmin={isAdmin} onEdit={() => setRateModalOpen(true)} />
         </div>
       </header>
 
@@ -218,6 +219,17 @@ export default function Budget() {
           onSourcesChange={setFundingSources}
         />
       ) : null}
+
+      <EditRatesModal
+        open={rateModalOpen}
+        onClose={() => setRateModalOpen(false)}
+        projectId={projectId}
+        initialRates={rates}
+        onSaved={(newRates) => {
+          setRates(newRates)
+          setRateModalOpen(false)
+        }}
+      />
     </div>
   )
 }
@@ -260,8 +272,9 @@ function ToggleButton({ active, onClick, children }) {
   )
 }
 
-function RateBadge({ rates }) {
-  // Affichage seul. La modification se fait dans Paramètres → Taux de change.
+function RateBadge({ rates, isAdmin, onEdit }) {
+  // Édition rapide via modal (admin only). Une 2e porte d'entrée existe dans
+  // Paramètres → Taux de change avec l'historique complet.
   const eur = rates?.eurToCad
   const cad = rates?.cadToEur
   const fmt = (v) => Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
@@ -276,7 +289,11 @@ function RateBadge({ rates }) {
       ) : (
         <span>Taux : <strong className="text-slate-900">Non défini</strong></span>
       )}
-      <Link to="/parametres" className="text-brand-blue hover:underline">Modifier dans Paramètres</Link>
+      {isAdmin ? (
+        <button type="button" onClick={onEdit} className="text-brand-blue hover:underline">
+          Modifier
+        </button>
+      ) : null}
     </div>
   )
 }

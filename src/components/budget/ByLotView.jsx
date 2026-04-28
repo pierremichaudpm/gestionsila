@@ -141,9 +141,9 @@ function DualCell({ amount, currency, rates }) {
   const derived = convertAmount(amount, currency, targetCurrency, rates)
   return (
     <div className="flex flex-col items-end">
-      <span className="font-medium text-slate-900">{Number(amount).toLocaleString('fr-FR')} {currency}</span>
+      <span className="text-base font-semibold tabular-nums text-slate-900">{Number(amount).toLocaleString('fr-FR')} {currency}</span>
       {derived !== null ? (
-        <span className="text-[10px] text-slate-400">{Number(derived).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} {targetCurrency}</span>
+        <span className="text-xs tabular-nums text-slate-500">{Number(derived).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} {targetCurrency}</span>
       ) : null}
     </div>
   )

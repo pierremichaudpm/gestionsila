@@ -208,10 +208,10 @@ function AmountCell({ editable, value, onChange, onBlur, nativeValue, nativeCurr
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur}
-          className="w-28 rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-sm tabular-nums hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          className="w-28 rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-base font-semibold tabular-nums text-slate-900 hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
         />
         {derived ? (
-          <span className="text-[10px] tabular-nums text-slate-400">{derived}</span>
+          <span className="text-xs tabular-nums text-slate-500">{derived}</span>
         ) : null}
       </div>
     )
@@ -219,11 +219,11 @@ function AmountCell({ editable, value, onChange, onBlur, nativeValue, nativeCurr
 
   return (
     <div className="flex flex-col items-end">
-      <span className="text-sm font-medium tabular-nums text-slate-900">
+      <span className="text-base font-semibold tabular-nums text-slate-900">
         {Number(nativeValue).toLocaleString('fr-FR')} {nativeCurrency}
       </span>
       {derived ? (
-        <span className="text-[10px] tabular-nums text-slate-400">{derived}</span>
+        <span className="text-xs tabular-nums text-slate-500">{derived}</span>
       ) : null}
     </div>
   )
