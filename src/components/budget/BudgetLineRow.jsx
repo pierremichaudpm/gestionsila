@@ -1,23 +1,26 @@
 import { useEffect, useState } from 'react'
 
+const COST_ORIGIN_OPTIONS = [
+  { value: '',          label: '—' },
+  { value: 'interne',   label: 'Interne' },
+  { value: 'apparente', label: 'Apparenté' },
+  { value: 'externe',   label: 'Externe' },
+]
+
+const COST_ORIGIN_LABEL = {
+  interne:   'Interne',
+  apparente: 'Apparenté',
+  externe:   'Externe',
+}
+
 export default function BudgetLineRow({ line, lots, editable, onUpdate, onDelete, extraCells }) {
-  const [draft, setDraft] = useState({
-    category: line.category,
-    planned: line.planned,
-    actual: line.actual,
-    lot_id: line.lot_id ?? '',
-  })
+  const [draft, setDraft] = useState(initialDraft(line))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    setDraft({
-      category: line.category,
-      planned: line.planned,
-      actual: line.actual,
-      lot_id: line.lot_id ?? '',
-    })
-  }, [line.id, line.category, line.planned, line.actual, line.lot_id])
+    setDraft(initialDraft(line))
+  }, [line.id, line.code, line.category, line.planned, line.actual, line.lot_id, line.cost_origin])
 
   async function commit(patch) {
     setSaving(true)
@@ -25,6 +28,11 @@ export default function BudgetLineRow({ line, lots, editable, onUpdate, onDelete
     const { error: e } = await onUpdate(line.id, patch)
     setSaving(false)
     if (e) setError(e.message)
+  }
+
+  function onCodeBlur() {
+    const v = draft.code.trim() || null
+    if (v !== (line.code ?? null)) commit({ code: v })
   }
 
   function onCategoryBlur() {
@@ -48,13 +56,34 @@ export default function BudgetLineRow({ line, lots, editable, onUpdate, onDelete
     if (v !== line.lot_id) commit({ lot_id: v })
   }
 
+  function onOriginChange(e) {
+    const v = e.target.value || null
+    setDraft(d => ({ ...d, cost_origin: e.target.value }))
+    if (v !== (line.cost_origin ?? null)) commit({ cost_origin: v })
+  }
+
   async function handleDelete() {
-    if (!window.confirm(`Supprimer la ligne « ${line.category} » ? Cette action est irréversible.`)) return
+    const ref = line.code ? `${line.code} — ${line.category}` : line.category
+    if (!window.confirm(`Supprimer la ligne « ${ref} » ? Cette action est irréversible.`)) return
     await onDelete(line.id)
   }
 
   return (
     <tr className={saving ? 'opacity-60' : ''}>
+      <td className="px-3 py-2">
+        {editable ? (
+          <input
+            type="text"
+            value={draft.code}
+            onChange={(e) => setDraft(d => ({ ...d, code: e.target.value }))}
+            onBlur={onCodeBlur}
+            className="w-12 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs tabular-nums hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+            placeholder="—"
+          />
+        ) : (
+          <span className="text-xs tabular-nums text-slate-600">{line.code ?? '—'}</span>
+        )}
+      </td>
       <td className="px-3 py-2">
         {editable ? (
           <input
@@ -116,6 +145,21 @@ export default function BudgetLineRow({ line, lots, editable, onUpdate, onDelete
         )}
       </td>
       <td className="px-3 py-2 text-xs text-slate-500">{line.currency}</td>
+      <td className="px-3 py-2">
+        {editable ? (
+          <select
+            value={draft.cost_origin}
+            onChange={onOriginChange}
+            className="rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-slate-600 hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          >
+            {COST_ORIGIN_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        ) : (
+          <span className="text-xs text-slate-600">
+            {line.cost_origin ? COST_ORIGIN_LABEL[line.cost_origin] : <span className="italic text-slate-400">—</span>}
+          </span>
+        )}
+      </td>
       {extraCells}
       <td className="px-3 py-2 text-right">
         {editable ? (
@@ -134,4 +178,15 @@ export default function BudgetLineRow({ line, lots, editable, onUpdate, onDelete
       </td>
     </tr>
   )
+}
+
+function initialDraft(line) {
+  return {
+    code:        line.code ?? '',
+    category:    line.category,
+    planned:     line.planned,
+    actual:      line.actual,
+    lot_id:      line.lot_id ?? '',
+    cost_origin: line.cost_origin ?? '',
+  }
 }

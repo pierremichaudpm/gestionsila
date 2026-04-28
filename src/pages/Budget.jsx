@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentProject } from '../lib/useCurrentProject'
+import { useAuth } from '../lib/AuthProvider.jsx'
 import ByCoproducerView from '../components/budget/ByCoproducerView.jsx'
 import ConsolidatedView from '../components/budget/ConsolidatedView.jsx'
 import ByLotView from '../components/budget/ByLotView.jsx'
+import StructureFinanciereView from '../components/budget/StructureFinanciereView.jsx'
 import { useCommentCounts } from '../components/comments/useCommentCounts.js'
 
 export default function Budget() {
   const { projectId, accessLevel, orgId, loading: projectLoading } = useCurrentProject()
+  const { profile } = useAuth()
+  const userCountry = profile?.country ?? null
   const [orgs, setOrgs] = useState([])
   const [lots, setLots] = useState([])
   const [lines, setLines] = useState([])
+  const [fundingSources, setFundingSources] = useState([])
   const [rate, setRate] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -40,24 +45,28 @@ export default function Budget() {
     async function load() {
       setLoading(true)
       setError(null)
-      const [orgsRes, lotsRes, linesRes, settingsRes] = await Promise.all([
+      const [orgsRes, lotsRes, linesRes, settingsRes, fundingRes] = await Promise.all([
         supabase.from('organizations').select('id, name, country, currency, role'),
         supabase.from('lots')
           .select('id, name, country, director, sort_order')
           .eq('project_id', projectId)
           .order('sort_order', { ascending: true }),
         supabase.from('budget_lines')
-          .select('id, org_id, lot_id, category, planned, actual, currency')
+          .select('id, org_id, lot_id, code, category, planned, actual, currency, cost_origin')
           .eq('project_id', projectId)
-          .order('category', { ascending: true }),
+          .order('code', { ascending: true, nullsFirst: false }),
         supabase.from('project_settings')
-          .select('exchange_rate_eur_to_cad')
+          .select('exchange_rate_eur_to_cad, exchange_rate_date')
           .eq('project_id', projectId)
           .maybeSingle(),
+        supabase.from('funding_sources')
+          .select('id, country, source_name, amount_eur, amount_cad, status, notes, sort_order')
+          .eq('project_id', projectId)
+          .order('sort_order', { ascending: true }),
       ])
 
       if (!alive) return
-      const firstError = orgsRes.error ?? lotsRes.error ?? linesRes.error ?? settingsRes.error
+      const firstError = orgsRes.error ?? lotsRes.error ?? linesRes.error ?? settingsRes.error ?? fundingRes.error
       if (firstError) {
         setError(firstError)
         setLoading(false)
@@ -67,6 +76,7 @@ export default function Budget() {
       setLots(lotsRes.data ?? [])
       setLines(linesRes.data ?? [])
       setRate(settingsRes.data?.exchange_rate_eur_to_cad ?? null)
+      setFundingSources(fundingRes.data ?? [])
       setLoading(false)
     }
 
@@ -92,7 +102,7 @@ export default function Budget() {
         actual: 0,
         currency,
       })
-      .select('id, org_id, lot_id, category, planned, actual, currency')
+      .select('id, org_id, lot_id, code, category, planned, actual, currency, cost_origin')
       .single()
     if (error) {
       setActionError(error.message)
@@ -223,6 +233,17 @@ export default function Budget() {
           onToggleExpanded={toggleLineExpanded}
           onCommentChange={handleCommentChange}
         />
+      ) : view === 'structure' ? (
+        <StructureFinanciereView
+          projectId={projectId}
+          orgs={orgs}
+          lines={lines}
+          rate={rate}
+          accessLevel={accessLevel}
+          userCountry={userCountry}
+          fundingSources={fundingSources}
+          onSourcesChange={setFundingSources}
+        />
       ) : null}
     </div>
   )
@@ -241,6 +262,9 @@ function ViewToggle({ value, onChange, isAdmin }) {
       ) : null}
       <ToggleButton active={value === 'byLot'} onClick={() => onChange('byLot')}>
         Par tableau
+      </ToggleButton>
+      <ToggleButton active={value === 'structure'} onClick={() => onChange('structure')}>
+        Structure financière
       </ToggleButton>
     </div>
   )

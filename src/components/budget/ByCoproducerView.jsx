@@ -3,6 +3,11 @@ import BudgetLineRow from './BudgetLineRow.jsx'
 import CommentBadge from '../comments/CommentBadge.jsx'
 import CommentThread from '../comments/CommentThread.jsx'
 
+// Devis SODEC pour le budget Canada — sert de référence à la cohérence affichée
+// sur la section JAXA. Tolérance : ±1 CAD pour les arrondis.
+const SODEC_TARGET_CAD = 120327
+const SODEC_TOLERANCE  = 1
+
 export default function ByCoproducerView({
   orgs,
   lines,
@@ -40,6 +45,7 @@ export default function ByCoproducerView({
         const editable = canEditOrg(org.id)
         const totalPlanned = orgLines.reduce((s, l) => s + Number(l.planned), 0)
         const totalActual = orgLines.reduce((s, l) => s + Number(l.actual), 0)
+        const isJaxaCanadianBudget = org.country === 'CA' && org.currency === 'CAD' && orgLines.length > 0
 
         return (
           <section key={org.id} className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -51,6 +57,9 @@ export default function ByCoproducerView({
                   {orgLines.length} {orgLines.length > 1 ? 'lignes' : 'ligne'} · {org.currency}
                   {!editable ? <span className="ml-2 italic">— lecture seule</span> : null}
                 </p>
+                {isJaxaCanadianBudget ? (
+                  <SodecCoherenceBadge totalPlanned={totalPlanned} />
+                ) : null}
               </div>
               <div className="text-right text-xs">
                 <div className="text-slate-500">Prévu : <strong className="tabular-nums text-slate-900">{formatAmount(totalPlanned, org.currency)}</strong></div>
@@ -65,11 +74,13 @@ export default function ByCoproducerView({
                 <table className="min-w-full text-sm">
                   <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                     <tr>
+                      <th className="px-3 py-2">Code</th>
                       <th className="px-3 py-2">Poste</th>
                       <th className="px-3 py-2">Tableau</th>
                       <th className="px-3 py-2 text-right">Prévu</th>
                       <th className="px-3 py-2 text-right">Réel</th>
                       <th className="px-3 py-2">Devise</th>
+                      <th className="px-3 py-2">Origine</th>
                       <th className="px-3 py-2"></th>
                       <th className="px-3 py-2"></th>
                     </tr>
@@ -96,7 +107,7 @@ export default function ByCoproducerView({
                     })}
                     {orgLines.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-3 py-4 text-center text-xs text-slate-400">
+                        <td colSpan={9} className="px-3 py-4 text-center text-xs text-slate-400">
                           Aucune ligne budgétaire pour cette org.
                         </td>
                       </tr>
@@ -104,10 +115,11 @@ export default function ByCoproducerView({
                   </tbody>
                   <tfoot className="bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-600">
                     <tr>
-                      <td className="px-3 py-2" colSpan={2}>Total {org.currency}</td>
+                      <td className="px-3 py-2" colSpan={3}>Total {org.currency}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{Number(totalPlanned).toLocaleString('fr-FR')}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{Number(totalActual).toLocaleString('fr-FR')}</td>
                       <td className="px-3 py-2">{org.currency}</td>
+                      <td className="px-3 py-2"></td>
                       <td className="px-3 py-2"></td>
                       <td className="px-3 py-2"></td>
                     </tr>
@@ -160,7 +172,7 @@ function Row({ line, lots, editable, onUpdate, onDelete, projectId, expanded, co
       />
       {expanded ? (
         <tr className="bg-slate-50/60">
-          <td colSpan={7} className="px-5 py-4">
+          <td colSpan={9} className="px-5 py-4">
             <CommentThread
               projectId={projectId}
               entityType="budget_line"
@@ -171,5 +183,24 @@ function Row({ line, lots, editable, onUpdate, onDelete, projectId, expanded, co
         </tr>
       ) : null}
     </>
+  )
+}
+
+function SodecCoherenceBadge({ totalPlanned }) {
+  const diff = Number(totalPlanned) - SODEC_TARGET_CAD
+  const absDiff = Math.abs(diff)
+  if (absDiff <= SODEC_TOLERANCE) {
+    return (
+      <span className="mt-1 inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+        <span aria-hidden="true">✓</span> Cohérent avec devis SODEC (120 327 CAD)
+      </span>
+    )
+  }
+  const sign = diff > 0 ? '+' : '−'
+  return (
+    <span className="mt-1 inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+      <span aria-hidden="true">⚠</span>
+      Écart vs devis SODEC : {sign}{Number(absDiff).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} CAD
+    </span>
   )
 }
