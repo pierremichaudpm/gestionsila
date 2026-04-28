@@ -13,8 +13,9 @@ export default function NewMilestoneModal({ open, onClose, projectId, lots, prof
   const isAdmin = accessLevel === 'admin'
   const initial = {
     title: '',
-    date: '',
-    type: 'depot_fonds',
+    start_date: '',
+    end_date: '',
+    type: 'jalon_production',
     country: profile?.country ?? 'CA',
     lot_id: '',
     notes: '',
@@ -38,6 +39,18 @@ export default function NewMilestoneModal({ open, onClose, projectId, lots, prof
   async function handleSubmit(e) {
     e.preventDefault()
     if (!projectId || !profile) return
+
+    const start = form.start_date
+    const end = form.end_date || null
+    if (!start) {
+      setError('La date de début est requise.')
+      return
+    }
+    if (end && end < start) {
+      setError('La date de fin doit être postérieure ou égale à la date de début.')
+      return
+    }
+
     setSubmitting(true)
     setError(null)
 
@@ -45,7 +58,8 @@ export default function NewMilestoneModal({ open, onClose, projectId, lots, prof
       project_id: projectId,
       lot_id: form.lot_id || null,
       title: form.title,
-      date: form.date,
+      start_date: start,
+      end_date: end,
       type: form.type,
       country: form.country,
       notes: form.notes || null,
@@ -73,15 +87,29 @@ export default function NewMilestoneModal({ open, onClose, projectId, lots, prof
           />
         </Field>
 
-        <Field label="Date" required>
-          <input
-            type="date"
-            required
-            value={form.date}
-            onChange={(e) => update('date', e.target.value)}
-            className="block w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
-          />
-        </Field>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Date de début" required>
+            <input
+              type="date"
+              required
+              value={form.start_date}
+              onChange={(e) => update('start_date', e.target.value)}
+              className="block w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+            />
+          </Field>
+          <Field label="Date de fin">
+            <input
+              type="date"
+              value={form.end_date}
+              onChange={(e) => update('end_date', e.target.value)}
+              min={form.start_date || undefined}
+              className="block w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+            />
+          </Field>
+        </div>
+        <p className="-mt-2 text-xs text-slate-500">
+          Laisser la date de fin vide pour un jalon ponctuel (un seul point dans le temps).
+        </p>
 
         <Field label="Type">
           <select

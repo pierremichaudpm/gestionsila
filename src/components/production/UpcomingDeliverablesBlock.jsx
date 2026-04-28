@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import {
   countryFlag,
   formatDate,
+  formatDateRange,
   milestoneType,
 } from '../../lib/format'
 
@@ -33,12 +34,14 @@ export default function UpcomingDeliverablesBlock({ projectId }) {
         .order('due_date', { ascending: true })
         .limit(10)
 
+      // Inclut les jalons ponctuels (end_date NULL) dont la start_date est
+      // encore à venir ou aujourd'hui.
       const milestonesQ = supabase
         .from('milestones')
-        .select('id, title, date, type, country')
+        .select('id, title, start_date, end_date, type, country')
         .eq('project_id', projectId)
-        .gte('date', today)
-        .order('date', { ascending: true })
+        .or(`end_date.gte.${today},and(end_date.is.null,start_date.gte.${today})`)
+        .order('start_date', { ascending: true })
         .limit(10)
 
       const [delRes, msRes] = await Promise.all([deliverablesQ, milestonesQ])
@@ -63,7 +66,8 @@ export default function UpcomingDeliverablesBlock({ projectId }) {
 
       const milestoneItems = (msRes.data ?? []).map(m => ({
         id: `milestone-${m.id}`,
-        date: m.date,
+        date: m.start_date,
+        endDate: m.end_date,
         title: m.title,
         type: m.type,
         typeLabel: milestoneType(m.type).label,
@@ -112,10 +116,12 @@ export default function UpcomingDeliverablesBlock({ projectId }) {
                 <li key={item.id}>
                   <Link
                     to={item.to}
-                    className="grid grid-cols-[6.5rem_1fr_auto] items-center gap-3 px-5 py-3 text-sm hover:bg-slate-50 sm:grid-cols-[6.5rem_5rem_1fr_auto_2rem]"
+                    className="grid grid-cols-[10rem_1fr_auto] items-center gap-3 px-5 py-3 text-sm hover:bg-slate-50 sm:grid-cols-[10rem_5rem_1fr_auto_2rem]"
                   >
                     <span className="font-medium tabular-nums text-slate-900">
-                      {formatDate(item.date)}
+                      {item.endDate && item.endDate !== item.date
+                        ? formatDateRange(item.date, item.endDate)
+                        : formatDate(item.date)}
                     </span>
                     <span className={`hidden shrink-0 rounded px-2 py-0.5 text-[11px] font-medium sm:inline-flex ${tBadge}`}>
                       {item.typeLabel}

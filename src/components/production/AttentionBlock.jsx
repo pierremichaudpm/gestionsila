@@ -42,12 +42,14 @@ export default function AttentionBlock({ projectId }) {
         .lte('due_date', horizonDate)
         .order('due_date', { ascending: true })
 
+      // Pour les jalons ponctuels (end_date NULL), c'est start_date qui sert
+      // de deadline.
       const milestonesQ = supabase
         .from('milestones')
-        .select('id, title, date, type, country')
+        .select('id, title, start_date, end_date, type, country')
         .eq('project_id', projectId)
-        .lte('date', horizonDate)
-        .order('date', { ascending: true })
+        .or(`end_date.lte.${horizonDate},and(end_date.is.null,start_date.lte.${horizonDate})`)
+        .order('start_date', { ascending: true })
 
       const documentsQ = currentUserId
         ? supabase
@@ -89,7 +91,8 @@ export default function AttentionBlock({ projectId }) {
       })
 
       const milestoneItems = (milestonesRes.data ?? []).map(m => {
-        const days = daysUntil(m.date)
+        const deadline = m.end_date ?? m.start_date
+        const days = daysUntil(deadline)
         const overdue = days !== null && days < 0
         return {
           kind: 'milestone',
@@ -99,7 +102,7 @@ export default function AttentionBlock({ projectId }) {
           tone: overdue ? 'late' : 'warn',
           title: m.title,
           context: milestoneType(m.type).label,
-          date: formatDate(m.date),
+          date: formatDate(deadline),
           to: '/calendrier',
         }
       })

@@ -219,22 +219,10 @@ insert into public.budget_lines (id, project_id, lot_id, org_id, category, plann
    null, '22222222-0000-0000-0000-000000000003', 'Frais structure',    12000.00,  3500.00, 'EUR');
 
 -- ----------------------------------------------------------------------------
--- Milestones (Phase 2 — jalons explicites par pays, IDs convention 77...)
+-- Milestones : insérés par la migration 007_seed_real_milestones.sql à partir
+-- de l'échéancier de production réel SILA — Tableau IV (avril → août 2026).
+-- Le seed n'en insère plus pour éviter le doublon sur fresh DB.
 -- ----------------------------------------------------------------------------
-insert into public.milestones (id, project_id, lot_id, title, date, type, country, notes, created_by) values
-  ('77777777-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111',
-   null, 'SODEC — dépôt rapport intermédiaire',         '2026-06-15', 'depot_fonds',      'CA', null, '33333333-0000-0000-0000-000000000001'),
-  ('77777777-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111',
-   null, 'CNC — dépôt étape 2',                          '2026-07-15', 'depot_fonds',      'FR', null, '33333333-0000-0000-0000-000000000003'),
-  ('77777777-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111',
-   '44444444-0000-0000-0000-000000000004',
-                                            'Fin tournage Les Phénomènes',                  '2026-08-30', 'jalon_production', 'CA', 'Tournage 5 jours, 4 décors', '33333333-0000-0000-0000-000000000001'),
-  ('77777777-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111',
-   null, 'FilmFund LU — dépôt production',               '2026-09-15', 'depot_fonds',      'LU', null, '33333333-0000-0000-0000-000000000006'),
-  ('77777777-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111',
-   null, 'Cannes XR — soumission',                       '2026-10-15', 'festival',         'FR', 'Deadline officielle Cannes', '33333333-0000-0000-0000-000000000003'),
-  ('77777777-0000-0000-0000-000000000006', '11111111-1111-1111-1111-111111111111',
-   null, 'Première publique SILA — Héroïnes Arctiques',  '2027-03-15', 'premiere',         'CA', null, '33333333-0000-0000-0000-000000000001');
 
 -- ----------------------------------------------------------------------------
 -- Deliverables avec dates (pour alimenter la timeline du Calendrier)

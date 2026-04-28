@@ -7,6 +7,7 @@ import {
   countryName,
   COUNTRY_OPTIONS,
   formatDateOnly,
+  formatDateRange,
   formatMonth,
   milestoneType,
   MILESTONE_TYPE_OPTIONS,
@@ -42,9 +43,9 @@ export default function Calendrier() {
       const [msRes, delRes, lotsRes] = await Promise.all([
         supabase
           .from('milestones')
-          .select('id, lot_id, title, date, type, country, notes')
+          .select('id, lot_id, title, start_date, end_date, type, country, notes')
           .eq('project_id', projectId)
-          .order('date', { ascending: true }),
+          .order('start_date', { ascending: true }),
         supabase
           .from('deliverables')
           .select('id, title, due_date, status, funder:funders!inner(id, name, country, project_id)')
@@ -80,7 +81,8 @@ export default function Calendrier() {
     const fromMilestones = milestones.map(m => ({
       id: `milestone-${m.id}`,
       source: 'milestone',
-      date: m.date,
+      startDate: m.start_date,
+      endDate: m.end_date,
       title: m.title,
       type: m.type,
       country: m.country,
@@ -91,7 +93,8 @@ export default function Calendrier() {
     const fromDeliverables = deliverables.map(d => ({
       id: `deliverable-${d.id}`,
       source: 'deliverable',
-      date: d.due_date,
+      startDate: d.due_date,
+      endDate: d.due_date,
       title: d.title,
       type: 'depot_fonds',
       country: d.funder?.country ?? null,
@@ -101,7 +104,7 @@ export default function Calendrier() {
       status: d.status,
     }))
     return [...fromMilestones, ...fromDeliverables].sort((a, b) =>
-      a.date < b.date ? -1 : a.date > b.date ? 1 : 0
+      a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0
     )
   }, [milestones, deliverables, lots])
 
@@ -120,7 +123,7 @@ export default function Calendrier() {
   const grouped = useMemo(() => {
     const byMonth = new Map()
     for (const item of filtered) {
-      const key = item.date.slice(0, 7)
+      const key = item.startDate.slice(0, 7)
       if (!byMonth.has(key)) byMonth.set(key, [])
       byMonth.get(key).push(item)
     }
@@ -265,11 +268,14 @@ function MonthSection({ monthKey, items, lots, milestoneCommentCounts, onMilesto
           const isMilestone = item.source === 'milestone'
           const milestoneId = isMilestone ? item.id.replace(/^milestone-/, '') : null
           const commentCount = isMilestone ? (milestoneCommentCounts.get(milestoneId) ?? 0) : 0
+          const dateLabel = item.source === 'milestone'
+            ? formatDateRange(item.startDate, item.endDate)
+            : formatDateOnly(item.startDate)
           const Card = (
             <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm transition-colors group-hover:border-brand-blue group-hover:bg-slate-50">
               <div className="flex flex-wrap items-baseline gap-3">
                 <span className="shrink-0 text-xs font-medium text-slate-500 tabular-nums">
-                  {formatDateOnly(item.date)}
+                  {dateLabel}
                 </span>
                 <span className={`inline-flex shrink-0 rounded px-2 py-0.5 text-[11px] font-medium ${type.badge}`}>
                   {type.label}

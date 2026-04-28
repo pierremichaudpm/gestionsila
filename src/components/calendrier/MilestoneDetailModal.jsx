@@ -3,7 +3,7 @@ import CommentThread from '../comments/CommentThread.jsx'
 import {
   countryFlag,
   countryName,
-  formatDateOnly,
+  formatDateRange,
   milestoneType,
 } from '../../lib/format'
 
@@ -21,7 +21,7 @@ export default function MilestoneDetailModal({ milestone, lots, projectId, onClo
             <span className={`inline-flex shrink-0 rounded px-2 py-0.5 text-[11px] font-medium ${type.badge}`}>
               {type.label}
             </span>
-            <span className="text-xs text-slate-500 tabular-nums">{formatDateOnly(milestone.date)}</span>
+            <span className="text-xs text-slate-500 tabular-nums">{formatDateRange(milestone.start_date, milestone.end_date)}</span>
             {milestone.country ? (
               <span className="text-xs text-slate-500" title={countryName(milestone.country)}>
                 {countryFlag(milestone.country)} {countryName(milestone.country)}

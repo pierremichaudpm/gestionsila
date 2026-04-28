@@ -133,6 +133,23 @@ export function formatDateOnly(iso) {
     .toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
 }
 
+// Période entre deux dates ISO. Cas pris en charge :
+//  - même date  → "30 mai 2026"
+//  - même année → "01 mai – 30 juin 2026" (année une seule fois)
+//  - sinon      → "15 déc. 2025 – 15 mars 2026"
+export function formatDateRange(startIso, endIso) {
+  if (!startIso) return '—'
+  if (!endIso || startIso === endIso) return formatDateOnly(startIso)
+  const [sy, sm, sd] = startIso.split('-').map(s => parseInt(s, 10))
+  const [ey] = endIso.split('-').map(s => parseInt(s, 10))
+  if (sy !== ey) {
+    return `${formatDateOnly(startIso)} – ${formatDateOnly(endIso)}`
+  }
+  const startShort = new Date(Date.UTC(sy, sm - 1, sd))
+    .toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+  return `${startShort} – ${formatDateOnly(endIso)}`
+}
+
 export function formatMonth(monthKey) {
   if (!monthKey) return '—'
   const [year, monthStr] = monthKey.split('-')
