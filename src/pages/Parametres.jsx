@@ -1,6 +1,7 @@
 import { useAuth } from '../lib/AuthProvider.jsx'
 import { useCurrentProject } from '../lib/useCurrentProject.js'
 import ProducerAccessSection from '../components/parametres/ProducerAccessSection.jsx'
+import ExchangeRateSection from '../components/parametres/ExchangeRateSection.jsx'
 
 export default function Parametres() {
   const { profile } = useAuth()
@@ -28,10 +29,16 @@ export default function Parametres() {
           </p>
         </div>
       ) : (
-        <ProducerAccessSection
-          projectId={projectId}
-          currentUserId={profile?.id}
-        />
+        <>
+          <ExchangeRateSection
+            projectId={projectId}
+            currentUserId={profile?.id}
+          />
+          <ProducerAccessSection
+            projectId={projectId}
+            currentUserId={profile?.id}
+          />
+        </>
       )}
     </div>
   )

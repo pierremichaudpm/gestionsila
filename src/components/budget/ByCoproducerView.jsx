@@ -1,4 +1,5 @@
-import { countryFlag, formatAmount } from '../../lib/format'
+import { countryFlag } from '../../lib/format'
+import { formatDualString } from '../../lib/currency'
 import BudgetLineRow from './BudgetLineRow.jsx'
 import CommentBadge from '../comments/CommentBadge.jsx'
 import CommentThread from '../comments/CommentThread.jsx'
@@ -12,6 +13,7 @@ export default function ByCoproducerView({
   orgs,
   lines,
   lots,
+  rates,
   canEditOrg,
   onCreate,
   onUpdate,
@@ -62,8 +64,12 @@ export default function ByCoproducerView({
                 ) : null}
               </div>
               <div className="text-right text-xs">
-                <div className="text-slate-500">Prévu : <strong className="tabular-nums text-slate-900">{formatAmount(totalPlanned, org.currency)}</strong></div>
-                <div className="text-slate-500">Réel : <strong className="tabular-nums text-slate-900">{formatAmount(totalActual, org.currency)}</strong></div>
+                <div className="text-slate-500">
+                  Prévu : <strong className="tabular-nums text-slate-900">{formatDualString(totalPlanned, org.currency, rates)}</strong>
+                </div>
+                <div className="text-slate-500">
+                  Réel : <strong className="tabular-nums text-slate-900">{formatDualString(totalActual, org.currency, rates)}</strong>
+                </div>
               </div>
             </header>
 
@@ -95,6 +101,7 @@ export default function ByCoproducerView({
                           line={line}
                           lots={lots}
                           editable={editable}
+                          rates={rates}
                           onUpdate={onUpdate}
                           onDelete={onDelete}
                           projectId={projectId}
@@ -116,8 +123,12 @@ export default function ByCoproducerView({
                   <tfoot className="bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-600">
                     <tr>
                       <td className="px-3 py-2" colSpan={3}>Total {org.currency}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{Number(totalPlanned).toLocaleString('fr-FR')}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{Number(totalActual).toLocaleString('fr-FR')}</td>
+                      <td className="px-3 py-2 text-right tabular-nums normal-case">
+                        <FootDual amount={totalPlanned} currency={org.currency} rates={rates} />
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums normal-case">
+                        <FootDual amount={totalActual} currency={org.currency} rates={rates} />
+                      </td>
                       <td className="px-3 py-2">{org.currency}</td>
                       <td className="px-3 py-2"></td>
                       <td className="px-3 py-2"></td>
@@ -146,7 +157,7 @@ export default function ByCoproducerView({
   )
 }
 
-function Row({ line, lots, editable, onUpdate, onDelete, projectId, expanded, count, onToggleExpanded, onCommentChange }) {
+function Row({ line, lots, editable, rates, onUpdate, onDelete, projectId, expanded, count, onToggleExpanded, onCommentChange }) {
   const badgeCell = (
     <td className="px-3 py-2">
       <button
@@ -166,6 +177,7 @@ function Row({ line, lots, editable, onUpdate, onDelete, projectId, expanded, co
         line={line}
         lots={lots}
         editable={editable}
+        rates={rates}
         onUpdate={onUpdate}
         onDelete={onDelete}
         extraCells={badgeCell}
@@ -183,6 +195,22 @@ function Row({ line, lots, editable, onUpdate, onDelete, projectId, expanded, co
         </tr>
       ) : null}
     </>
+  )
+}
+
+function FootDual({ amount, currency, rates }) {
+  const native = `${Number(amount).toLocaleString('fr-FR')} ${currency}`
+  const targetCurrency = currency === 'CAD' ? 'EUR' : 'CAD'
+  const rate = currency === 'EUR' ? rates?.eurToCad : rates?.cadToEur
+  if (!rate) return <span>{native}</span>
+  const derived = Number(amount) * Number(rate)
+  return (
+    <div className="flex flex-col items-end">
+      <span>{native}</span>
+      <span className="text-[10px] tabular-nums text-slate-400">
+        {Number(derived).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} {targetCurrency}
+      </span>
+    </div>
   )
 }
 

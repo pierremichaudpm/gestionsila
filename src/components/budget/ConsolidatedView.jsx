@@ -1,5 +1,6 @@
 import { Fragment } from 'react'
-import { countryFlag, formatAmount } from '../../lib/format'
+import { countryFlag } from '../../lib/format'
+import { convertAmount, formatOne } from '../../lib/currency'
 import CommentBadge from '../comments/CommentBadge.jsx'
 import CommentThread from '../comments/CommentThread.jsx'
 
@@ -7,7 +8,7 @@ export default function ConsolidatedView({
   orgs,
   lines,
   lots,
-  rate,
+  rates,
   projectId,
   commentCounts,
   expandedLineId,
@@ -17,21 +18,21 @@ export default function ConsolidatedView({
   const orgsById = Object.fromEntries(orgs.map(o => [o.id, o]))
   const lotsById = Object.fromEntries(lots.map(l => [l.id, l]))
 
-  if (!rate) {
+  if (!rates?.eurToCad || !rates?.cadToEur) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
-        <p className="font-medium">Taux de change non défini.</p>
+        <p className="font-medium">Taux de change non définis.</p>
         <p className="mt-1">
-          Définissez le taux EUR → CAD dans l'en-tête de cette page pour activer la vue consolidée.
+          Renseignez les deux taux (1 EUR → CAD et 1 CAD → EUR) dans Paramètres → Taux de change.
         </p>
       </div>
     )
   }
 
   const toCad = (amount, currency) =>
-    currency === 'CAD' ? Number(amount) : Number(amount) * rate
+    currency === 'CAD' ? Number(amount) : convertAmount(amount, currency, 'CAD', rates) ?? 0
   const toEur = (amount, currency) =>
-    currency === 'EUR' ? Number(amount) : Number(amount) / rate
+    currency === 'EUR' ? Number(amount) : convertAmount(amount, currency, 'EUR', rates) ?? 0
 
   const totals = lines.reduce(
     (acc, l) => ({
@@ -46,8 +47,9 @@ export default function ConsolidatedView({
   return (
     <div className="space-y-3">
       <p className="text-xs text-slate-500">
-        Taux appliqué : <strong>1 EUR = {rate} CAD</strong>. Les montants en devise locale sont préservés ;
-        les conversions sont calculées côté client.
+        Taux appliqués : <strong className="tabular-nums">1 EUR = {rates.eurToCad} CAD</strong> ·{' '}
+        <strong className="tabular-nums">1 CAD = {rates.cadToEur} EUR</strong>.
+        Montants en devise locale préservés ; conversions côté client.
       </p>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -84,12 +86,12 @@ export default function ConsolidatedView({
                       {lot?.name ?? <span className="italic text-slate-400">Transversal</span>}
                     </td>
                     <td className="px-3 py-2 text-xs">{line.currency}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{Number(line.planned).toLocaleString('fr-FR')}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{Number(line.actual).toLocaleString('fr-FR')}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{toCad(line.planned, line.currency).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{toEur(line.planned, line.currency).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{toCad(line.actual, line.currency).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{toEur(line.actual, line.currency).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatOne(line.planned, line.currency)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatOne(line.actual, line.currency)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{formatOne(toCad(line.planned, line.currency), 'CAD')}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{formatOne(toEur(line.planned, line.currency), 'EUR')}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{formatOne(toCad(line.actual, line.currency), 'CAD')}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{formatOne(toEur(line.actual, line.currency), 'EUR')}</td>
                     <td className="px-3 py-2">
                       <button
                         type="button"
@@ -121,10 +123,10 @@ export default function ConsolidatedView({
           <tfoot className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-700">
             <tr>
               <td className="px-3 py-3" colSpan={6}>Totaux consolidés</td>
-              <td className="px-3 py-3 text-right tabular-nums">{formatAmount(totals.plannedCad, 'CAD')}</td>
-              <td className="px-3 py-3 text-right tabular-nums">{formatAmount(totals.plannedEur, 'EUR')}</td>
-              <td className="px-3 py-3 text-right tabular-nums">{formatAmount(totals.actualCad, 'CAD')}</td>
-              <td className="px-3 py-3 text-right tabular-nums">{formatAmount(totals.actualEur, 'EUR')}</td>
+              <td className="px-3 py-3 text-right tabular-nums">{formatOne(totals.plannedCad, 'CAD')}</td>
+              <td className="px-3 py-3 text-right tabular-nums">{formatOne(totals.plannedEur, 'EUR')}</td>
+              <td className="px-3 py-3 text-right tabular-nums">{formatOne(totals.actualCad, 'CAD')}</td>
+              <td className="px-3 py-3 text-right tabular-nums">{formatOne(totals.actualEur, 'EUR')}</td>
               <td className="px-3 py-3"></td>
             </tr>
           </tfoot>

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { countryFlag, countryName, formatAmount } from '../../lib/format'
+import { countryFlag, countryName } from '../../lib/format'
+import { convertAmount, formatOne } from '../../lib/currency'
 
 const COUNTRIES = ['CA', 'FR', 'LU']
 const COHERENCE_TOLERANCE = 1
@@ -14,7 +15,7 @@ export default function StructureFinanciereView({
   projectId,
   orgs,
   lines,
-  rate,
+  rates,
   accessLevel,
   userCountry,
   fundingSources,
@@ -57,26 +58,21 @@ export default function StructureFinanciereView({
     return orgLines.reduce((sum, l) => {
       const planned = Number(l.planned)
       if (l.currency === 'CAD') return sum + planned
-      if (rate)                 return sum + planned * Number(rate)
-      return sum
+      const converted = convertAmount(planned, l.currency, 'CAD', rates)
+      return sum + (converted ?? 0)
     }, 0)
   }
 
-  // Pour les sources : amount_cad si présent, sinon conversion via le taux.
+  // Pour les sources : amount_cad si présent (contractuel), sinon conversion
+  // via le taux courant pour combler. Idem dans l'autre sens pour amount_eur.
   function sourceCadValue(source) {
     if (source.amount_cad !== null && source.amount_cad !== undefined) return Number(source.amount_cad)
-    if (source.amount_eur !== null && source.amount_eur !== undefined && rate) {
-      return Number(source.amount_eur) * Number(rate)
-    }
-    return 0
+    return convertAmount(source.amount_eur, 'EUR', 'CAD', rates) ?? 0
   }
 
   function sourceEurValue(source) {
     if (source.amount_eur !== null && source.amount_eur !== undefined) return Number(source.amount_eur)
-    if (source.amount_cad !== null && source.amount_cad !== undefined && rate) {
-      return Number(source.amount_cad) / Number(rate)
-    }
-    return 0
+    return convertAmount(source.amount_cad, 'CAD', 'EUR', rates) ?? 0
   }
 
   async function handleCreate(country) {
@@ -143,8 +139,11 @@ export default function StructureFinanciereView({
     <div className="space-y-4">
       <p className="text-xs text-slate-500">
         Sources de financement par pays. Les montants <strong>EUR et CAD</strong> sont stockés
-        séparément (montants contractuels) — le taux courant ({rate ? `1 EUR = ${rate} CAD` : 'non défini'})
-        sert uniquement aux conversions affichées si une devise manque.
+        séparément (montants contractuels). Le taux courant
+        {rates?.eurToCad && rates?.cadToEur ? (
+          <> (<span className="tabular-nums">1 EUR = {rates.eurToCad} CAD</span> · <span className="tabular-nums">1 CAD = {rates.cadToEur} EUR</span>)</>
+        ) : ' (non défini)'}
+        {' '}sert uniquement aux conversions affichées si une devise manque.
       </p>
 
       {actionError ? (
@@ -181,8 +180,9 @@ export default function StructureFinanciereView({
               </button>
               <div className="ml-auto flex flex-wrap items-center gap-3 text-xs">
                 <div className="text-right">
-                  <div className="text-slate-500">Total CAD : <strong className="tabular-nums text-slate-900">{formatAmount(sourcesCad, 'CAD')}</strong></div>
-                  <div className="text-slate-500">Total EUR : <strong className="tabular-nums text-slate-900">{formatAmount(sourcesEur, 'EUR')}</strong></div>
+                  <div className="font-medium tabular-nums text-slate-900">
+                    {formatOne(sourcesCad, 'CAD', { fractionDigits: 2 })} / {formatOne(sourcesEur, 'EUR', { fractionDigits: 2 })}
+                  </div>
                 </div>
                 <CoherenceBadge diff={diff} budgetCad={budgetCad} hasOrg={!!org} />
               </div>
@@ -266,7 +266,7 @@ function CoherenceBadge({ diff, budgetCad, hasOrg }) {
   return (
     <span
       className="inline-flex items-center gap-1 rounded bg-red-50 px-2 py-1 text-[11px] font-medium text-red-700"
-      title={`Sources : ${formatAmount(diff > 0 ? budgetCad + diff : budgetCad - absDiff, 'CAD')} · Budget : ${formatAmount(budgetCad, 'CAD')}`}
+      title={`Sources : ${formatOne(budgetCad + diff, 'CAD', { fractionDigits: 2 })} · Budget : ${formatOne(budgetCad, 'CAD', { fractionDigits: 2 })}`}
     >
       <span aria-hidden="true">⚠</span>
       Écart : {sign}{Number(absDiff).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} CAD
@@ -283,28 +283,24 @@ function GrandTotalsFooter({ sourcesCad, sourcesEur, budgetCad }) {
       <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Grand total consolidé</h3>
       <div className="mt-2 grid gap-3 sm:grid-cols-3">
         <div>
-          <div className="text-xs text-slate-500">Sources (CAD)</div>
-          <div className="text-lg font-semibold tabular-nums text-slate-900">{formatAmount(sourcesCad, 'CAD')}</div>
-        </div>
-        <div>
-          <div className="text-xs text-slate-500">Sources (EUR)</div>
-          <div className="text-lg font-semibold tabular-nums text-slate-900">{formatAmount(sourcesEur, 'EUR')}</div>
+          <div className="text-xs text-slate-500">Sources (CAD / EUR)</div>
+          <div className="text-lg font-semibold tabular-nums text-slate-900">
+            {formatOne(sourcesCad, 'CAD', { fractionDigits: 2 })}
+          </div>
+          <div className="text-xs tabular-nums text-slate-500">
+            {formatOne(sourcesEur, 'EUR', { fractionDigits: 2 })}
+          </div>
         </div>
         <div>
           <div className="text-xs text-slate-500">Budgets coproducteurs (CAD)</div>
-          <div className="text-lg font-semibold tabular-nums text-slate-900">{formatAmount(budgetCad, 'CAD')}</div>
+          <div className="text-lg font-semibold tabular-nums text-slate-900">{formatOne(budgetCad, 'CAD', { fractionDigits: 2 })}</div>
         </div>
-      </div>
-      <div className="mt-3 text-xs">
-        {coherent ? (
-          <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
-            ✓ Sources cohérentes avec les budgets ({formatAmount(absDiff, 'CAD')} d'écart)
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 rounded bg-red-50 px-2 py-1 font-medium text-red-700">
-            ⚠ Écart global : {diff > 0 ? '+' : '−'}{Number(absDiff).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} CAD
-          </span>
-        )}
+        <div>
+          <div className="text-xs text-slate-500">Écart sources vs budget</div>
+          <div className={`text-lg font-semibold tabular-nums ${coherent ? 'text-emerald-700' : 'text-red-700'}`}>
+            {coherent ? '✓ Cohérent' : `${diff > 0 ? '+' : '−'}${formatOne(absDiff, 'CAD', { fractionDigits: 2 })}`}
+          </div>
+        </div>
       </div>
     </section>
   )

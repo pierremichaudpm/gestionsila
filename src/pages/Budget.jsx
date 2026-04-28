@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useCurrentProject } from '../lib/useCurrentProject'
 import { useAuth } from '../lib/AuthProvider.jsx'
@@ -16,13 +17,10 @@ export default function Budget() {
   const [lots, setLots] = useState([])
   const [lines, setLines] = useState([])
   const [fundingSources, setFundingSources] = useState([])
-  const [rate, setRate] = useState(null)
+  const [rates, setRates] = useState({ eurToCad: null, cadToEur: null, date: null })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [view, setView] = useState('byCoproducer')
-  const [editingRate, setEditingRate] = useState(false)
-  const [rateDraft, setRateDraft] = useState('')
-  const [rateError, setRateError] = useState(null)
   const [actionError, setActionError] = useState(null)
   const [expandedLineId, setExpandedLineId] = useState(null)
   const [commentBump, setCommentBump] = useState(0)
@@ -56,7 +54,7 @@ export default function Budget() {
           .eq('project_id', projectId)
           .order('code', { ascending: true, nullsFirst: false }),
         supabase.from('project_settings')
-          .select('exchange_rate_eur_to_cad, exchange_rate_date')
+          .select('exchange_rate_eur_to_cad, exchange_rate_cad_to_eur, exchange_rate_date')
           .eq('project_id', projectId)
           .maybeSingle(),
         supabase.from('funding_sources')
@@ -75,7 +73,11 @@ export default function Budget() {
       setOrgs(orgsRes.data ?? [])
       setLots(lotsRes.data ?? [])
       setLines(linesRes.data ?? [])
-      setRate(settingsRes.data?.exchange_rate_eur_to_cad ?? null)
+      setRates({
+        eurToCad: settingsRes.data?.exchange_rate_eur_to_cad ? Number(settingsRes.data.exchange_rate_eur_to_cad) : null,
+        cadToEur: settingsRes.data?.exchange_rate_cad_to_eur ? Number(settingsRes.data.exchange_rate_cad_to_eur) : null,
+        date:     settingsRes.data?.exchange_rate_date ?? null,
+      })
       setFundingSources(fundingRes.data ?? [])
       setLoading(false)
     }
@@ -134,27 +136,6 @@ export default function Budget() {
     }
   }
 
-  async function commitRate() {
-    setRateError(null)
-    const v = parseFloat(rateDraft)
-    if (Number.isNaN(v) || v <= 0) {
-      setRateError('Taux invalide')
-      return
-    }
-    const { error } = await supabase
-      .from('project_settings')
-      .upsert(
-        { project_id: projectId, exchange_rate_eur_to_cad: v },
-        { onConflict: 'project_id' }
-      )
-    if (error) {
-      setRateError(error.message)
-      return
-    }
-    setRate(v)
-    setEditingRate(false)
-  }
-
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -166,17 +147,7 @@ export default function Budget() {
         </div>
         <div className="flex flex-col items-end gap-2">
           <ViewToggle value={view} onChange={setView} isAdmin={isAdmin} />
-          <RateBadge
-            rate={rate}
-            isAdmin={isAdmin}
-            editing={editingRate}
-            draft={rateDraft}
-            onEdit={() => { setRateDraft(rate ?? ''); setEditingRate(true) }}
-            onCancel={() => { setEditingRate(false); setRateError(null) }}
-            onChange={setRateDraft}
-            onCommit={commitRate}
-            error={rateError}
-          />
+          <RateBadge rates={rates} />
         </div>
       </header>
 
@@ -200,6 +171,7 @@ export default function Budget() {
           orgs={orgs}
           lines={lines}
           lots={lots}
+          rates={rates}
           canEditOrg={canEditOrg}
           onCreate={handleCreate}
           onUpdate={handleUpdate}
@@ -215,7 +187,7 @@ export default function Budget() {
           orgs={orgs}
           lines={lines}
           lots={lots}
-          rate={rate}
+          rates={rates}
           projectId={projectId}
           commentCounts={commentCounts}
           expandedLineId={expandedLineId}
@@ -227,6 +199,7 @@ export default function Budget() {
           orgs={orgs}
           lines={lines}
           lots={lots}
+          rates={rates}
           projectId={projectId}
           commentCounts={commentCounts}
           expandedLineId={expandedLineId}
@@ -238,7 +211,7 @@ export default function Budget() {
           projectId={projectId}
           orgs={orgs}
           lines={lines}
-          rate={rate}
+          rates={rates}
           accessLevel={accessLevel}
           userCountry={userCountry}
           fundingSources={fundingSources}
@@ -287,49 +260,23 @@ function ToggleButton({ active, onClick, children }) {
   )
 }
 
-function RateBadge({ rate, isAdmin, editing, draft, onEdit, onCancel, onChange, onCommit, error }) {
-  if (editing) {
-    return (
-      <div className="inline-flex items-center gap-2 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs">
-        <span className="text-slate-500">1 EUR =</span>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={draft}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-20 rounded border border-slate-300 px-2 py-0.5 text-right text-sm tabular-nums focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
-          autoFocus
-        />
-        <span className="text-slate-500">CAD</span>
-        <button type="button" onClick={onCommit} className="rounded bg-[color:var(--color-brand-navy)] px-2 py-1 text-white hover:bg-[color:var(--color-brand-blue)]">
-          OK
-        </button>
-        <button type="button" onClick={onCancel} className="text-slate-500 hover:text-slate-700">
-          Annuler
-        </button>
-        {error ? <span className="text-red-600">{error}</span> : null}
-      </div>
-    )
-  }
-
-  // Affichage de l'inverse pour mémoire (utile aux producteurs côté CAD).
-  const inverse = rate ? (1 / Number(rate)) : null
+function RateBadge({ rates }) {
+  // Affichage seul. La modification se fait dans Paramètres → Taux de change.
+  const eur = rates?.eurToCad
+  const cad = rates?.cadToEur
+  const fmt = (v) => Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
   return (
     <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
-      <span>
-        Taux : <strong className="text-slate-900 tabular-nums">{rate ? `1 EUR = ${Number(rate).toFixed(4)} CAD` : 'Non défini'}</strong>
-      </span>
-      {inverse ? (
-        <span className="text-slate-400 tabular-nums">
-          (1 CAD = {inverse.toLocaleString('fr-FR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })} EUR)
+      {eur && cad ? (
+        <span>
+          <strong className="text-slate-900 tabular-nums">1 EUR = {fmt(eur)} CAD</strong>
+          <span className="mx-1 text-slate-300">·</span>
+          <strong className="text-slate-900 tabular-nums">1 CAD = {fmt(cad)} EUR</strong>
         </span>
-      ) : null}
-      {isAdmin ? (
-        <button type="button" onClick={onEdit} className="text-brand-blue hover:underline">
-          {rate ? 'Modifier' : 'Définir'}
-        </button>
-      ) : null}
+      ) : (
+        <span>Taux : <strong className="text-slate-900">Non défini</strong></span>
+      )}
+      <Link to="/parametres" className="text-brand-blue hover:underline">Modifier dans Paramètres</Link>
     </div>
   )
 }

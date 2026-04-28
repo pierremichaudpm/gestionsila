@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentProject } from '../lib/useCurrentProject'
+import { useExchangeRates } from '../lib/useExchangeRates'
+import { formatDualString } from '../lib/currency'
 import {
   countryFlag,
   countryName,
   daysUntil,
   deliverableStatus,
   DELIVERABLE_STATUS_OPTIONS,
-  formatAmount,
   formatDate,
   funderStatus,
   toneClass,
@@ -19,6 +20,7 @@ import { useCommentCounts } from '../components/comments/useCommentCounts.js'
 
 export default function Livrables() {
   const { projectId, loading: projectLoading } = useCurrentProject()
+  const { rates } = useExchangeRates(projectId)
   const [funders, setFunders] = useState([])
   const [deliverables, setDeliverables] = useState([])
   const [loading, setLoading] = useState(true)
@@ -150,6 +152,7 @@ export default function Livrables() {
             <FunderAccordion
               key={f.id}
               funder={f}
+              rates={rates}
               deliverables={deliverablesByFunder.get(f.id) ?? []}
               open={openIds.has(f.id)}
               onToggle={() => toggleOpen(f.id)}
@@ -212,7 +215,7 @@ function ToggleButton({ active, onClick, children }) {
   )
 }
 
-function FunderAccordion({ funder, deliverables, open, onToggle, onAddDeliverable, onStatusChange, commentCounts, expandedDeliverableId, onToggleExpanded, projectId, onCommentChange }) {
+function FunderAccordion({ funder, rates, deliverables, open, onToggle, onAddDeliverable, onStatusChange, commentCounts, expandedDeliverableId, onToggleExpanded, projectId, onCommentChange }) {
   const status = funderStatus(funder.status)
   return (
     <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -228,7 +231,7 @@ function FunderAccordion({ funder, deliverables, open, onToggle, onAddDeliverabl
           <div>
             <div className="text-sm font-semibold text-slate-900">{funder.name}</div>
             <div className="mt-0.5 text-xs text-slate-500">
-              {funder.beneficiary?.name ?? '—'} · {formatAmount(funder.amount, funder.currency)}
+              {funder.beneficiary?.name ?? '—'} · {formatDualString(funder.amount, funder.currency, rates)}
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { convertAmount } from '../../lib/currency'
 
 const COST_ORIGIN_OPTIONS = [
   { value: '',          label: '—' },
@@ -13,7 +14,7 @@ const COST_ORIGIN_LABEL = {
   externe:   'Externe',
 }
 
-export default function BudgetLineRow({ line, lots, editable, onUpdate, onDelete, extraCells }) {
+export default function BudgetLineRow({ line, lots, editable, onUpdate, onDelete, extraCells, rates }) {
   const [draft, setDraft] = useState(initialDraft(line))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -115,34 +116,26 @@ export default function BudgetLineRow({ line, lots, editable, onUpdate, onDelete
         )}
       </td>
       <td className="px-3 py-2 text-right">
-        {editable ? (
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={draft.planned}
-            onChange={(e) => setDraft(d => ({ ...d, planned: e.target.value }))}
-            onBlur={() => onAmountBlur('planned')}
-            className="w-28 rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-sm tabular-nums hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
-          />
-        ) : (
-          <span className="text-sm tabular-nums">{Number(line.planned).toLocaleString('fr-FR')}</span>
-        )}
+        <AmountCell
+          editable={editable}
+          value={draft.planned}
+          onChange={(v) => setDraft(d => ({ ...d, planned: v }))}
+          onBlur={() => onAmountBlur('planned')}
+          nativeValue={line.planned}
+          nativeCurrency={line.currency}
+          rates={rates}
+        />
       </td>
       <td className="px-3 py-2 text-right">
-        {editable ? (
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={draft.actual}
-            onChange={(e) => setDraft(d => ({ ...d, actual: e.target.value }))}
-            onBlur={() => onAmountBlur('actual')}
-            className="w-28 rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-sm tabular-nums hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
-          />
-        ) : (
-          <span className="text-sm tabular-nums">{Number(line.actual).toLocaleString('fr-FR')}</span>
-        )}
+        <AmountCell
+          editable={editable}
+          value={draft.actual}
+          onChange={(v) => setDraft(d => ({ ...d, actual: v }))}
+          onBlur={() => onAmountBlur('actual')}
+          nativeValue={line.actual}
+          nativeCurrency={line.currency}
+          rates={rates}
+        />
       </td>
       <td className="px-3 py-2 text-xs text-slate-500">{line.currency}</td>
       <td className="px-3 py-2">
@@ -189,4 +182,49 @@ function initialDraft(line) {
     lot_id:      line.lot_id ?? '',
     cost_origin: line.cost_origin ?? '',
   }
+}
+
+// Cellule montant avec affichage dual : montant principal en devise native
+// (gras), montant converti dans l'autre devise (gris, plus petit) en dessous.
+// En mode édition, l'input est sur la devise native ; le converti se met à
+// jour à chaque saisie.
+function AmountCell({ editable, value, onChange, onBlur, nativeValue, nativeCurrency, rates }) {
+  const targetCurrency = nativeCurrency === 'CAD' ? 'EUR' : 'CAD'
+  // En mode édition : utilise la valeur courante de l'input (live preview).
+  // En mode lecture : utilise la valeur persistée du record.
+  const sourceForDerived = editable ? Number(value || 0) : Number(nativeValue || 0)
+  const derivedRaw = convertAmount(sourceForDerived, nativeCurrency, targetCurrency, rates)
+  const derived = derivedRaw !== null
+    ? `${Number(derivedRaw).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} ${targetCurrency}`
+    : null
+
+  if (editable) {
+    return (
+      <div className="flex flex-col items-end">
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          className="w-28 rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-sm tabular-nums hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+        />
+        {derived ? (
+          <span className="text-[10px] tabular-nums text-slate-400">{derived}</span>
+        ) : null}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col items-end">
+      <span className="text-sm font-medium tabular-nums text-slate-900">
+        {Number(nativeValue).toLocaleString('fr-FR')} {nativeCurrency}
+      </span>
+      {derived ? (
+        <span className="text-[10px] tabular-nums text-slate-400">{derived}</span>
+      ) : null}
+    </div>
+  )
 }

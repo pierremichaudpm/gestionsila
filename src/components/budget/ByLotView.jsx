@@ -1,5 +1,6 @@
 import { Fragment } from 'react'
-import { countryFlag, formatAmount } from '../../lib/format'
+import { countryFlag } from '../../lib/format'
+import { convertAmount, formatDualString } from '../../lib/currency'
 import CommentBadge from '../comments/CommentBadge.jsx'
 import CommentThread from '../comments/CommentThread.jsx'
 
@@ -7,6 +8,7 @@ export default function ByLotView({
   orgs,
   lines,
   lots,
+  rates,
   projectId,
   commentCounts,
   expandedLineId,
@@ -57,8 +59,12 @@ export default function ByLotView({
               <div className="flex flex-wrap gap-3 text-right text-xs">
                 {Object.entries(byCurrency).map(([currency, sums]) => (
                   <div key={currency}>
-                    <div className="text-slate-500">Prévu {currency} : <strong className="tabular-nums text-slate-900">{formatAmount(sums.planned, currency)}</strong></div>
-                    <div className="text-slate-500">Réel {currency} : <strong className="tabular-nums text-slate-900">{formatAmount(sums.actual, currency)}</strong></div>
+                    <div className="text-slate-500">
+                      Prévu : <strong className="tabular-nums text-slate-900">{formatDualString(sums.planned, currency, rates)}</strong>
+                    </div>
+                    <div className="text-slate-500">
+                      Réel : <strong className="tabular-nums text-slate-900">{formatDualString(sums.actual, currency, rates)}</strong>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -86,8 +92,12 @@ export default function ByLotView({
                         <tr>
                           <td className="px-3 py-2 text-xs">{countryFlag(org?.country)} {org?.name ?? '—'}</td>
                           <td className="px-3 py-2">{line.category}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{Number(line.planned).toLocaleString('fr-FR')}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{Number(line.actual).toLocaleString('fr-FR')}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            <DualCell amount={line.planned} currency={line.currency} rates={rates} />
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            <DualCell amount={line.actual} currency={line.currency} rates={rates} />
+                          </td>
                           <td className="px-3 py-2 text-xs">{line.currency}</td>
                           <td className="px-3 py-2">
                             <button
@@ -122,6 +132,19 @@ export default function ByLotView({
           </section>
         )
       })}
+    </div>
+  )
+}
+
+function DualCell({ amount, currency, rates }) {
+  const targetCurrency = currency === 'CAD' ? 'EUR' : 'CAD'
+  const derived = convertAmount(amount, currency, targetCurrency, rates)
+  return (
+    <div className="flex flex-col items-end">
+      <span className="font-medium text-slate-900">{Number(amount).toLocaleString('fr-FR')} {currency}</span>
+      {derived !== null ? (
+        <span className="text-[10px] text-slate-400">{Number(derived).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} {targetCurrency}</span>
+      ) : null}
     </div>
   )
 }
