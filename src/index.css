@@ -3,7 +3,7 @@
 @theme {
   --color-brand-navy: #1B3A5C;
   --color-brand-blue: #2E75B6;
-  --color-surface: #F8F9FA;
+  --color-surface: #f1e2bc;
   --color-text-primary: #333333;
   --color-text-secondary: #6B7280;
   --color-status-ok: #059669;
@@ -23,6 +23,8 @@ body {
   font-family: var(--font-sans);
   font-size: 14px;
   color: var(--color-text-primary);
-  background: #FFFFFF;
+  background-color: var(--color-surface);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.3 0 0 0 0 0.2 0 0 0 0 0.1 0 0 0 0.28 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-repeat: repeat;
   -webkit-font-smoothing: antialiased;
 }

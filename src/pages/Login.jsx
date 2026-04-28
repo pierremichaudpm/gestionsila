@@ -31,7 +31,7 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[color:var(--color-surface)] px-4">
+    <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
         <div className="mb-6">
           <div className="text-xs uppercase tracking-wide text-slate-500">Gestion SILA</div>
