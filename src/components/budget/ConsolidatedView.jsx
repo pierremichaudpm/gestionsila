@@ -56,7 +56,7 @@ export default function ConsolidatedView({
             <tr>
               <th className="px-3 py-2">Org</th>
               <th className="px-3 py-2">Poste</th>
-              <th className="px-3 py-2">Lot</th>
+              <th className="px-3 py-2">Tableau</th>
               <th className="px-3 py-2">Devise</th>
               <th className="px-3 py-2 text-right">Prévu (locale)</th>
               <th className="px-3 py-2 text-right">Réel (locale)</th>

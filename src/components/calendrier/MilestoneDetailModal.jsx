@@ -30,7 +30,7 @@ export default function MilestoneDetailModal({ milestone, lots, projectId, onClo
           </div>
           <h3 className="mt-2 text-base font-semibold text-slate-900">{milestone.title}</h3>
           {lot ? (
-            <p className="mt-1 text-xs text-slate-500">Lot : {lot.name}</p>
+            <p className="mt-1 text-xs text-slate-500">Tableau : {lot.name}</p>
           ) : null}
           {milestone.notes ? (
             <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{milestone.notes}</p>

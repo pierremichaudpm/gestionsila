@@ -240,7 +240,7 @@ function ViewToggle({ value, onChange, isAdmin }) {
         </ToggleButton>
       ) : null}
       <ToggleButton active={value === 'byLot'} onClick={() => onChange('byLot')}>
-        Par lot
+        Par tableau
       </ToggleButton>
     </div>
   )

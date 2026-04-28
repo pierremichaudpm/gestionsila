@@ -230,9 +230,9 @@ function Filters({ filters, onChange, lots }) {
           <option key={t} value={t}>{milestoneType(t).label}</option>
         ))}
       </FilterSelect>
-      <FilterSelect label="Lot" value={filters.lot} onChange={(v) => onChange('lot', v)}>
+      <FilterSelect label="Tableau" value={filters.lot} onChange={(v) => onChange('lot', v)}>
         <option value="all">Tous</option>
-        <option value="transversal">Transversal (sans lot)</option>
+        <option value="transversal">Transversal (sans tableau)</option>
         {lots.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
       </FilterSelect>
     </div>

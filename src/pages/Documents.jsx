@@ -167,7 +167,7 @@ export default function Documents() {
                 <tr>
                   <SortHeader label="Titre" sortKey="title" sort={sort} onClick={toggleSort} />
                   <SortHeader label="Catégorie" sortKey="category" sort={sort} onClick={toggleSort} />
-                  <SortHeader label="Lot" sortKey="lot" sort={sort} onClick={toggleSort} />
+                  <SortHeader label="Tableau" sortKey="lot" sort={sort} onClick={toggleSort} />
                   <SortHeader label="Pays" sortKey="country" sort={sort} onClick={toggleSort} />
                   <SortHeader label="Version" sortKey="version" sort={sort} onClick={toggleSort} />
                   <SortHeader label="Statut" sortKey="validation_status" sort={sort} onClick={toggleSort} />
@@ -223,11 +223,11 @@ function Filters({ filters, onChange, lots }) {
   return (
     <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-4">
       <FilterSelect
-        label="Lot"
+        label="Tableau"
         value={filters.lot}
         onChange={(v) => onChange('lot', v)}
       >
-        <option value="">Tous les lots</option>
+        <option value="">Tous les tableaux</option>
         <option value="transversal">Transversal</option>
         {lots.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
       </FilterSelect>

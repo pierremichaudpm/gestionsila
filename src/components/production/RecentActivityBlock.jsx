@@ -104,7 +104,7 @@ const ACTION_LABELS = {
 
 const ENTITY_LABELS = {
   document:    'un document',
-  lot:         'un lot',
+  lot:         'un tableau',
   task:        'une tâche',
   funder:      'un bailleur',
   deliverable: 'un livrable',

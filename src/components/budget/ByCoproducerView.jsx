@@ -66,7 +66,7 @@ export default function ByCoproducerView({
                   <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="px-3 py-2">Poste</th>
-                      <th className="px-3 py-2">Lot</th>
+                      <th className="px-3 py-2">Tableau</th>
                       <th className="px-3 py-2 text-right">Prévu</th>
                       <th className="px-3 py-2 text-right">Réel</th>
                       <th className="px-3 py-2">Devise</th>

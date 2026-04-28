@@ -144,7 +144,7 @@ export default function NewMilestoneModal({ open, onClose, projectId, lots, prof
           )}
         </Field>
 
-        <Field label="Lot (optionnel)">
+        <Field label="Tableau (optionnel)">
           <select
             value={form.lot_id}
             onChange={(e) => update('lot_id', e.target.value)}

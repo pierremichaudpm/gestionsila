@@ -40,7 +40,7 @@ export default function LotsBlock({ projectId }) {
   return (
     <section>
       <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Lots</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Tableaux</h2>
         {!loading && !error ? (
           <span className="text-xs text-slate-400">{lots.length}</span>
         ) : null}
@@ -49,12 +49,12 @@ export default function LotsBlock({ projectId }) {
         <LotsSkeleton />
       ) : error ? (
         <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm">
-          <p className="font-medium text-red-700">Impossible de charger les lots.</p>
+          <p className="font-medium text-red-700">Impossible de charger les tableaux.</p>
           <p className="mt-1 text-slate-500">{error.message}</p>
         </div>
       ) : lots.length === 0 ? (
         <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">
-          Aucun lot pour l'instant.
+          Aucun tableau pour l'instant.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">

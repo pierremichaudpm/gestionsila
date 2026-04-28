@@ -75,7 +75,7 @@ export default function LotDetail() {
   if (error) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-        <p className="font-medium">Impossible de charger ce lot.</p>
+        <p className="font-medium">Impossible de charger ce tableau.</p>
         <p className="mt-1 text-red-600">{error.message}</p>
       </div>
     )
@@ -83,9 +83,9 @@ export default function LotDetail() {
   if (!lot) {
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm">
-        <p className="font-medium text-slate-900">Lot introuvable.</p>
+        <p className="font-medium text-slate-900">Tableau introuvable.</p>
         <Link to="/lots" className="mt-2 inline-block text-brand-blue hover:underline">
-          ← Retour aux lots
+          ← Retour aux tableaux
         </Link>
       </div>
     )
@@ -97,7 +97,7 @@ export default function LotDetail() {
     <div className="space-y-6">
       <div>
         <Link to="/lots" className="text-sm text-slate-500 hover:text-brand-navy">
-          ← Lots
+          ← Tableaux
         </Link>
       </div>
 
@@ -234,7 +234,7 @@ function LotDocuments({ lotId }) {
   if (docs.length === 0) {
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-        <p className="font-medium text-slate-900">Aucun document pour ce lot.</p>
+        <p className="font-medium text-slate-900">Aucun document pour ce tableau.</p>
         <p className="mt-1">
           <Link to="/documents" className="text-brand-blue hover:underline">
             Ajouter le premier document depuis la page Documents →
@@ -278,11 +278,11 @@ function LotDocuments({ lotId }) {
 function LotLivrables() {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-      <p className="font-medium text-slate-900">Livrables non liés aux lots.</p>
+      <p className="font-medium text-slate-900">Livrables non liés aux tableaux.</p>
       <p className="mt-1">
         Les livrables sont actuellement rattachés aux bailleurs (voir{' '}
         <Link to="/livrables" className="text-brand-blue hover:underline">page Livrables</Link>
-        ). Le lien direct lot ↔ livrable nécessite une migration de schéma à venir.
+        ). Le lien direct tableau ↔ livrable nécessite une migration de schéma à venir.
       </p>
     </div>
   )

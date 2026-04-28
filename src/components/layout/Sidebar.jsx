@@ -4,7 +4,7 @@ import { useAuth } from '../../lib/AuthProvider.jsx'
 const NAV_ITEMS = [
   { to: '/production', label: 'Dashboard' },
   { to: '/calendrier', label: 'Calendrier' },
-  { to: '/lots', label: 'Lots' },
+  { to: '/lots', label: 'Tableaux' },
   { to: '/documents', label: 'Documents' },
   { to: '/livrables', label: 'Livrables' },
   { to: '/budget', label: 'Budget' },

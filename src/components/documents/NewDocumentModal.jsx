@@ -110,13 +110,13 @@ export default function NewDocumentModal({ open, onClose, projectId, userCountry
           </select>
         </Field>
 
-        <Field label="Lot">
+        <Field label="Tableau">
           <select
             value={form.lot_id}
             onChange={(e) => update('lot_id', e.target.value)}
             className="block w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
           >
-            <option value="">Transversal (aucun lot)</option>
+            <option value="">Transversal (aucun tableau)</option>
             {lots.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
         </Field>

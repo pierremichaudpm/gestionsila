@@ -48,7 +48,7 @@ export default function ByLotView({
             <header className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-3">
               <div className="flex-1">
                 <h2 className="text-sm font-semibold text-slate-900">
-                  {lot ? lot.name : <span className="italic">Transversal (aucun lot)</span>}
+                  {lot ? lot.name : <span className="italic">Transversal (aucun tableau)</span>}
                 </h2>
                 {lot ? (
                   <p className="text-xs text-slate-500">{countryFlag(lot.country)} · {lot.director ?? '—'}</p>

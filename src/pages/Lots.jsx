@@ -45,9 +45,9 @@ export default function Lots() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold text-brand-navy">Lots</h1>
+        <h1 className="text-2xl font-semibold text-brand-navy">Tableaux</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Tableaux de la production. Cliquez sur un lot pour voir ses documents et livrables.
+          Tableaux de la production. Cliquez sur un tableau pour voir ses documents et livrables.
         </p>
       </header>
 
@@ -118,7 +118,7 @@ function LotsGridSkeleton() {
 function ErrorState({ error }) {
   return (
     <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-      <p className="font-medium">Impossible de charger les lots.</p>
+      <p className="font-medium">Impossible de charger les tableaux.</p>
       <p className="mt-1 text-red-600">{error.message}</p>
     </div>
   )
@@ -127,7 +127,7 @@ function ErrorState({ error }) {
 function EmptyState() {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-      <p className="font-medium text-slate-900">Aucun lot pour ce projet.</p>
+      <p className="font-medium text-slate-900">Aucun tableau pour ce projet.</p>
       <p className="mt-1">Les tableaux apparaîtront ici une fois créés.</p>
     </div>
   )
