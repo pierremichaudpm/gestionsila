@@ -42,7 +42,8 @@ export default function Sidebar() {
         </div>
         <div className="mt-5 text-xs uppercase tracking-wide text-slate-300">Projet</div>
         <div className="mt-1 text-2xl font-bold leading-tight tracking-tight">
-          SILA — Héroïnes Arctiques
+          <div>SILA</div>
+          <div>Héroïnes Arctiques</div>
         </div>
       </div>
 
