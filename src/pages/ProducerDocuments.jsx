@@ -16,6 +16,8 @@ import {
 } from '../lib/format'
 import NewProducerDocumentModal from '../components/producers/NewProducerDocumentModal.jsx'
 import EditProducerDocumentModal from '../components/producers/EditProducerDocumentModal.jsx'
+import ModifiedBadge from '../components/audit/ModifiedBadge.jsx'
+import { PRODUCER_DOCUMENT_LABELS } from '../lib/auditLabels'
 import CommentThread from '../components/comments/CommentThread.jsx'
 import CommentBadge from '../components/comments/CommentBadge.jsx'
 import { useCommentCounts } from '../components/comments/useCommentCounts.js'
@@ -52,7 +54,7 @@ export default function ProducerDocuments() {
       const [docsRes, lotsRes] = await Promise.all([
         supabase
           .from('producer_documents')
-          .select('id, title, folder, country, version, validation_status, drive_url, lot_id, uploaded_by, updated_at, lot:lots(id, name)')
+          .select('id, title, folder, country, version, validation_status, drive_url, lot_id, uploaded_by, updated_at, imported_value, last_modified_at, lot:lots(id, name), last_modified_by_user:users!producer_documents_last_modified_by_fkey(full_name)')
           .eq('project_id', projectId)
           .eq('folder', folder)
           .order('updated_at', { ascending: false }),
@@ -279,7 +281,15 @@ function ProducerDocumentRow({ doc, profile, accessLevel, onAction, onEdit, comm
     <>
       <tr className="hover:bg-slate-50">
         <td className="px-3 py-2 font-medium text-slate-900">
-          <div className="truncate">{doc.title}</div>
+          <div className="flex items-center gap-1">
+            <span className="truncate">{doc.title}</span>
+            <ModifiedBadge
+              importedValue={doc.imported_value}
+              modifiedAt={doc.last_modified_at}
+              modifiedByName={doc.last_modified_by_user?.full_name}
+              fieldLabels={PRODUCER_DOCUMENT_LABELS}
+            />
+          </div>
         </td>
         <td className="px-3 py-2 text-slate-600">
           {doc.lot?.name ?? <span className="italic text-slate-400">Transversal</span>}

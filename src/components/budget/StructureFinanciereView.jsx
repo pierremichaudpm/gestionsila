@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { countryFlag, countryName } from '../../lib/format'
 import { convertAmount, formatOne } from '../../lib/currency'
+import ModifiedBadge from '../audit/ModifiedBadge.jsx'
+import { FUNDING_SOURCE_LABELS } from '../../lib/auditLabels'
 
 const COUNTRIES = ['CA', 'FR', 'LU']
 const COHERENCE_TOLERANCE = 1
@@ -92,7 +94,7 @@ export default function StructureFinanciereView({
         notes: null,
         sort_order: maxOrder + 1,
       })
-      .select('id, country, source_name, amount_eur, amount_cad, status, notes, sort_order')
+      .select('id, country, source_name, amount_eur, amount_cad, status, notes, sort_order, imported_value, last_modified_at, last_modified_by_user:users!funding_sources_last_modified_by_fkey(full_name)')
       .single()
     if (error) {
       setActionError(error.message)
@@ -340,17 +342,25 @@ function SourceRow({ source, editable, isAdmin, onUpdate, onDelete }) {
   return (
     <tr>
       <td className="px-3 py-2">
-        {editable ? (
-          <input
-            type="text"
-            value={draft.source_name}
-            onChange={(e) => setDraft(d => ({ ...d, source_name: e.target.value }))}
-            onBlur={() => commitField('source_name', draft.source_name.trim() || source.source_name)}
-            className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+        <div className="flex items-center gap-1">
+          {editable ? (
+            <input
+              type="text"
+              value={draft.source_name}
+              onChange={(e) => setDraft(d => ({ ...d, source_name: e.target.value }))}
+              onBlur={() => commitField('source_name', draft.source_name.trim() || source.source_name)}
+              className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+            />
+          ) : (
+            <span className="text-sm">{source.source_name}</span>
+          )}
+          <ModifiedBadge
+            importedValue={source.imported_value}
+            modifiedAt={source.last_modified_at}
+            modifiedByName={source.last_modified_by_user?.full_name}
+            fieldLabels={FUNDING_SOURCE_LABELS}
           />
-        ) : (
-          <span className="text-sm">{source.source_name}</span>
-        )}
+        </div>
       </td>
       <td className="px-3 py-2 text-right">
         {editable ? (

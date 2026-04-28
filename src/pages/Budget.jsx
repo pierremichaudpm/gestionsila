@@ -51,7 +51,7 @@ export default function Budget() {
           .eq('project_id', projectId)
           .order('sort_order', { ascending: true }),
         supabase.from('budget_lines')
-          .select('id, org_id, lot_id, code, category, planned, actual, currency, cost_origin')
+          .select('id, org_id, lot_id, code, category, planned, actual, currency, cost_origin, imported_value, last_modified_at, last_modified_by_user:users!budget_lines_last_modified_by_fkey(full_name)')
           .eq('project_id', projectId)
           .order('code', { ascending: true, nullsFirst: false }),
         supabase.from('project_settings')
@@ -59,7 +59,7 @@ export default function Budget() {
           .eq('project_id', projectId)
           .maybeSingle(),
         supabase.from('funding_sources')
-          .select('id, country, source_name, amount_eur, amount_cad, status, notes, sort_order')
+          .select('id, country, source_name, amount_eur, amount_cad, status, notes, sort_order, imported_value, last_modified_at, last_modified_by_user:users!funding_sources_last_modified_by_fkey(full_name)')
           .eq('project_id', projectId)
           .order('sort_order', { ascending: true }),
       ])
@@ -105,7 +105,7 @@ export default function Budget() {
         actual: 0,
         currency,
       })
-      .select('id, org_id, lot_id, code, category, planned, actual, currency, cost_origin')
+      .select('id, org_id, lot_id, code, category, planned, actual, currency, cost_origin, imported_value, last_modified_at, last_modified_by_user:users!budget_lines_last_modified_by_fkey(full_name)')
       .single()
     if (error) {
       setActionError(error.message)

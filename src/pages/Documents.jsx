@@ -20,6 +20,8 @@ import NewDocumentModal from '../components/documents/NewDocumentModal.jsx'
 import EditDocumentModal from '../components/documents/EditDocumentModal.jsx'
 import CommentThread from '../components/comments/CommentThread.jsx'
 import CommentBadge from '../components/comments/CommentBadge.jsx'
+import ModifiedBadge from '../components/audit/ModifiedBadge.jsx'
+import { DOCUMENT_LABELS } from '../lib/auditLabels'
 import { useCommentCounts } from '../components/comments/useCommentCounts.js'
 
 const PAGE_SIZE = 25
@@ -58,7 +60,7 @@ export default function Documents() {
       const [docsRes, lotsRes] = await Promise.all([
         supabase
           .from('documents')
-          .select('id, title, category, folder, country, version, validation_status, drive_url, lot_id, uploaded_by, updated_at, lot:lots(id, name)')
+          .select('id, title, category, folder, country, version, validation_status, drive_url, lot_id, uploaded_by, updated_at, imported_value, last_modified_at, lot:lots(id, name), last_modified_by_user:users!documents_last_modified_by_fkey(full_name)')
           .eq('project_id', projectId)
           .order('updated_at', { ascending: false }),
         supabase
@@ -488,7 +490,15 @@ function DocumentRow({ doc, profile, accessLevel, onAction, onEdit, commentCount
     <>
       <tr className="hover:bg-slate-50">
         <td className="px-3 py-2 font-medium text-slate-900">
-          <div className="truncate">{doc.title}</div>
+          <div className="flex items-center gap-1">
+            <span className="truncate">{doc.title}</span>
+            <ModifiedBadge
+              importedValue={doc.imported_value}
+              modifiedAt={doc.last_modified_at}
+              modifiedByName={doc.last_modified_by_user?.full_name}
+              fieldLabels={DOCUMENT_LABELS}
+            />
+          </div>
         </td>
         <td className="px-3 py-2">
           <span className={`inline-flex rounded px-2 py-0.5 text-[11px] font-medium ${categoryBadgeClass(doc.category)}`}>

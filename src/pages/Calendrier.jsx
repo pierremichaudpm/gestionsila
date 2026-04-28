@@ -16,7 +16,9 @@ import NewMilestoneModal from '../components/calendrier/NewMilestoneModal.jsx'
 import EditMilestoneModal from '../components/calendrier/EditMilestoneModal.jsx'
 import MilestoneDetailModal from '../components/calendrier/MilestoneDetailModal.jsx'
 import CommentBadge from '../components/comments/CommentBadge.jsx'
+import ModifiedBadge from '../components/audit/ModifiedBadge.jsx'
 import { useCommentCounts } from '../components/comments/useCommentCounts.js'
+import { MILESTONE_LABELS } from '../lib/auditLabels'
 
 export default function Calendrier() {
   const { projectId, accessLevel, loading: projectLoading } = useCurrentProject()
@@ -45,7 +47,7 @@ export default function Calendrier() {
       const [msRes, delRes, lotsRes] = await Promise.all([
         supabase
           .from('milestones')
-          .select('id, lot_id, title, start_date, end_date, type, country, notes')
+          .select('id, lot_id, title, start_date, end_date, type, country, notes, imported_value, last_modified_at, last_modified_by_user:users!milestones_last_modified_by_fkey(full_name)')
           .eq('project_id', projectId)
           .order('start_date', { ascending: true }),
         supabase
@@ -91,6 +93,9 @@ export default function Calendrier() {
       lotId: m.lot_id ?? null,
       context: m.lot_id ? lotsById[m.lot_id]?.name ?? '—' : null,
       notes: m.notes,
+      importedValue: m.imported_value,
+      modifiedAt: m.last_modified_at,
+      modifiedByName: m.last_modified_by_user?.full_name ?? null,
     }))
     const fromDeliverables = deliverables.map(d => ({
       id: `deliverable-${d.id}`,
@@ -298,7 +303,17 @@ function MonthSection({ monthKey, items, lots, milestoneCommentCounts, onMilesto
                 <span className={`inline-flex shrink-0 rounded px-2 py-0.5 text-[11px] font-medium ${type.badge}`}>
                   {type.label}
                 </span>
-                <span className="flex-1 text-sm font-medium text-slate-900">{item.title}</span>
+                <span className="flex-1 text-sm font-medium text-slate-900">
+                  {item.title}
+                  {isMilestone ? (
+                    <ModifiedBadge
+                      importedValue={item.importedValue}
+                      modifiedAt={item.modifiedAt}
+                      modifiedByName={item.modifiedByName}
+                      fieldLabels={MILESTONE_LABELS}
+                    />
+                  ) : null}
+                </span>
                 {isMilestone ? (
                   <CommentBadge count={commentCount} />
                 ) : null}

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { convertAmount } from '../../lib/currency'
+import ModifiedBadge from '../audit/ModifiedBadge.jsx'
+import { BUDGET_LINE_LABELS } from '../../lib/auditLabels'
 
 const COST_ORIGIN_OPTIONS = [
   { value: '',          label: '—' },
@@ -98,18 +100,26 @@ export default function BudgetLineRow({ line, lots, orgs, isAdmin, editable, onU
         )}
       </td>
       <td className="px-3 py-2">
-        {editable ? (
-          <input
-            type="text"
-            value={draft.category}
-            onChange={(e) => setDraft(d => ({ ...d, category: e.target.value }))}
-            onBlur={onCategoryBlur}
-            list="budget-categories"
-            className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+        <div className="flex items-center gap-1">
+          {editable ? (
+            <input
+              type="text"
+              value={draft.category}
+              onChange={(e) => setDraft(d => ({ ...d, category: e.target.value }))}
+              onBlur={onCategoryBlur}
+              list="budget-categories"
+              className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+            />
+          ) : (
+            <span className="text-sm">{line.category}</span>
+          )}
+          <ModifiedBadge
+            importedValue={line.imported_value}
+            modifiedAt={line.last_modified_at}
+            modifiedByName={line.last_modified_by_user?.full_name}
+            fieldLabels={BUDGET_LINE_LABELS}
           />
-        ) : (
-          <span className="text-sm">{line.category}</span>
-        )}
+        </div>
       </td>
       <td className="px-3 py-2">
         {editable ? (
