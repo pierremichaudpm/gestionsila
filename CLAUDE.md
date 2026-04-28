@@ -24,18 +24,42 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - **M6 Dashboard** : 4 blocs aggrégent les nouvelles données (milestones dans Attention et Lots count, fusion deliverables+milestones dans Échéances), `activity_log` alimenté automatiquement par triggers PostgreSQL
 
 **Phase 2.5 ✓ — module commentaires contextuels (déployée)**
-- Fils de discussion attachés aux entités métier (document, deliverable, milestone, lot, budget_line). Pas de chat global — Discord reste l'outil de conversation, Drive garde ses commentaires sur les fichiers.
+- Fils de discussion attachés aux entités métier (document, deliverable, milestone, lot, budget_line, producer_document depuis 009). Pas de chat global — Discord reste l'outil de conversation, Drive garde ses commentaires sur les fichiers.
 - Composant réutilisable `<CommentThread>` + badge cliquable `<CommentBadge>` + hook bulk `useCommentCounts`
-- Câblé sur 5 pages : Documents (expansion inline), Livrables (expansion inline), Calendrier (modal détail jalon), Lots (section bas de page), Budget sur ses 3 vues (Par coproducteur / Consolidée / Par lot — état d'expansion partagé)
-- Trigger PostgreSQL `log_comment_activity` qui résout le titre du parent et insère dans `activity_log` avec action `commented` → s'affiche dans "Activité récente" du dashboard
-- Pas de mentions @user, pas d'édition (suppression seulement par l'auteur), pas de threads imbriqués, pas de notifications email — repoussés en Phase 3
+- Câblé sur 6 pages : Documents (expansion inline), ProducerDocuments (idem), Livrables (expansion inline), Calendrier (modal détail jalon), Lots (section bas de page), Budget sur ses 4 vues (Par coproducteur / Consolidée / Par tableau / Structure financière — état d'expansion partagé)
+- Trigger PostgreSQL `log_comment_activity` qui résout le titre du parent et insère dans `activity_log` avec action `commented`
+- Filtré par RLS pour les entités sensibles (budget_line, producer_document) — non-membres de l'Espace Producteurs ne voient pas ces commentaires
+
+**Phase 3 ✓ — données réelles SILA + Espace Producteurs + édition universelle (déployée 2026-04-28)**
+- **Échéancier importé** (006-007) : 16 jalons réels du Tableau IV, périodes start_date / end_date avec end_date NULL pour ponctuels. Statut conservé en notes. Renommage UI Lot → Tableau (DB inchangée).
+- **Documents avec sous-dossiers** (008) : vue à 2 niveaux. Niveau 1 = grille des 4 sous-dossiers (techno / création / texte / divers) avec compteurs. Niveau 2 = liste filtrée. Catégorie « Référence » ajoutée dans 016.
+- **Espace Producteurs** (009) : section confidentielle gated par `has_producer_access`. Couvre Budget, Assurances, Légal. Couche d'invisibilité (sidebar masquée + RLS serveur + filtre activity_log + filtre comments). Tables `producer_documents` et `producer_access_log`. 5 personnes initialisées (Virginie, Marie, William, Hélène, Anne-Lise).
+- **Articulation budget Canada** (010-011) : 19 lignes JAXA importées (devis SODEC, total 120 327 CAD), avec `code` SODEC et `cost_origin` (interne / apparente / externe). Badge cohérence sur la section JAXA. Taux corrigé à 1.6135.
+- **Structure financière** (010) : table `funding_sources` avec amount_eur ET amount_cad séparés (contractuels). 22 sources importées du CSV. **4ᵉ onglet Budget** avec 3 sections accordéon par pays + badges cohérence + grand total consolidé.
+- **3 nouveaux comptes** (012) : Aude Guivarc'h (org Indépendante CA), Jérémy Roy + Louis TB (Neek Studio CA). Tous contractor / sans accès producteurs. + 4 emails corrigés (Mathieu, William, Hélène, Anne-Lise — Marie et Raphaël déjà OK).
+- **Double affichage CAD/EUR partout** (013) : 2 taux indépendants (`exchange_rate_eur_to_cad` + `exchange_rate_cad_to_eur`), table `exchange_rate_history` + trigger d'audit. Helpers `formatDual`, `formatDualString`. Section Paramètres → Taux de change avec édition + historique. EditRatesModal réutilisable depuis Budget header.
+- **Édition universelle** (014, 015, 017) : 5 modals d'édition (jalons, documents, producer_documents, livrables, profil membre) + extensions inline (currency, org_id, country). Page Équipe : self-edit (full_name + role) ou admin (tous champs avec garde-fou anti-déconnexion). RLS uniformisée sur 7 tables — admin escape partout, production_manager dans le scope écriture sur son pays.
+- **Traçabilité** (018) : 4 colonnes audit (`imported`, `imported_value`, `last_modified_by`, `last_modified_at`) sur 5 tables. Trigger générique `track_imported_changes()` qui capture la valeur d'origine au PREMIER changement de chaque champ surveillé. Picto ✎ ambre côté UI avec tooltip valeur d'origine.
 
 **Migrations**
 - 001 — schéma initial (11 tables, RLS, helpers SECURITY DEFINER)
 - 002 — `project_settings` (taux change) + RLS budget_lines élargie pour coproducer
 - 003 — table `milestones` (timeline calendrier)
 - 004 — triggers `activity_log` (anti-noise : INSERT toujours, UPDATE filtré sur champs significatifs)
-- 005 — table `comments` + RLS (lecture membres, insert sauf contractor sauf sur ses propres docs, update/delete auteur) + trigger activity_log
+- 005 — table `comments` + RLS + trigger activity_log
+- 006 — `milestones.start_date` + `end_date` (remplace `date`), trigger adapté
+- 007 — supprime 6 jalons démo, importe 16 jalons réels SILA Échéancier (Tableau IV avr.→août 2026 + Venise + Première)
+- 008 — `documents.folder` (techno / creation / texte / divers) + index + check
+- 009 — `project_members.has_producer_access` + tables `producer_access_log` et `producer_documents` + RLS hardening sur budget_lines + filtres activity_log et comments + trigger producer_documents activity
+- 010 — `budget_lines.code` + `.cost_origin` + `project_settings.exchange_rate_date` + table `funding_sources` + import 19 lignes JAXA + 22 sources financement
+- 011 — taux corrigé 1.6232 → 1.6135 (cohérent CSV contractuel)
+- 012 — 2 nouvelles orgs (Neek Studio, Indépendante) + 3 nouveaux users (Aude, Jérémy, Louis) + correction 4 emails (Mathieu, William, Hélène, Anne-Lise)
+- 013 — `project_settings.exchange_rate_cad_to_eur` (indépendant) + table `exchange_rate_history` + trigger d'audit
+- 014 — policy `users_update_admin` (admin peut modifier autres profils)
+- 015 — fix RLS deliverables (admin escape, regression production_manager corrigée en 017)
+- 016 — ajout catégorie `'reference'` dans documents.category CHECK
+- 017 — audit RLS holistique sur 7 tables (admin escape sur lots/tasks/documents/producer_documents, production_manager réintégré sur deliverables/funders/milestones)
+- 018 — colonnes audit `imported` / `imported_value` / `last_modified_by/at` sur 5 tables + trigger générique `track_imported_changes` + backfill 16 jalons + 19 budget JAXA + 22 sources
 
 **Hosting**
 - Auto-deploy GitHub → Netlify activé depuis 2026-04-28 (lien repo dans Netlify dashboard, branche `main`, ~12s de build par push)
@@ -44,22 +68,25 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - Sidebar 320px navy avec 3 logos circulaires 88px (Poulpe Bleu en `object-cover`, autres en `object-contain` padding 10px), titre "SILA / Héroïnes Arctiques" sur 2 lignes en `text-2xl bold`
 - Fond crème vintage `#f1e2bc` avec grain SVG (`feTurbulence baseFrequency=0.7`, brun à 28% d'alpha)
 - Footer "Propulsé par Studio Micho · Jaxa" sur toutes les pages protégées
-- Sidebar nav : `Production` renommé `Dashboard`
+- Sidebar nav principale : Dashboard / Calendrier / Tableaux / Documents / Livrables / Équipe — Budget retiré
+- Sidebar Espace Producteurs (visible si `has_producer_access`) : Assurances / Légal / Budget — avec icône cadenas
 
 **Données**
-- Emails réels : `virginiejaffredo@jaxa.ca` (Virginie, admin) et `pierre.michaud@jaxa.ca` (Pierre Michaud — Dev outils, remplace Axelle dans le seed)
-- 7 autres utilisateurs encore en placeholders (Mathieu, Marie, William, Hélène, Anne-Lise, Raphaël, Antoine) — à corriger avant la mise en prod réelle
+- Tous les emails sont les vrais à présent : `virginiejaffredo@jaxa.ca`, `pierre.michaud@jaxa.ca`, `mrozieres@dark-euphoria.com`, `marie@dark-euphoria.com`, `wboard@dark-euphoria.com`, `helenewalland@gmail.com`, `millerannelise@gmail.com`, `raphael@voulez-vous.studio`, `antoine@freelance.example`, `aude@guivar.ch`, `jeremy@neek.studio`, `louis@neek.studio`. Antoine reste en placeholder le temps que Virginie nous donne son vrai email.
 
-**Phase 3 — non planifiée, non chiffrée**
-- Notifications email Resend (rappels échéances, validations en attente, nouveaux commentaires)
+**Phase 4 — non planifiée, non chiffrée**
+- Notifications email Resend (rappels échéances, validations en attente, nouveaux commentaires, changements de taux)
 - Exports PDF (état d'avancement par bailleur, mise en page propre pour SODEC/CNC)
 - Génération assistée de rapports avec IA
-- Page Paramètres (config Discord URL, gestion équipe depuis l'UI, catégories documents personnalisables)
+- Page Paramètres : config Discord URL, gestion équipe depuis l'UI (créer un user sans passer par migration SQL), catégories documents personnalisables
 - Module commentaires : mentions @user, édition de commentaire, threads imbriqués
-- Migration 006 éventuelle pour lier lots ↔ milestones et deliverables ↔ documents (jonctions actuellement absentes)
+- Édition d'un funder (bailleur lui-même) — actuellement read-only dans la card Livrables
+- Code splitting `React.lazy()` sur Budget et Calendrier (bundle à 622 KB, au-delà du seuil Vite 500 KB)
+- Migration éventuelle pour lier lots ↔ milestones et deliverables ↔ documents (jonctions toujours absentes)
 
 **Documentation client**
-- `GUIDE_VIRGINIE.docx` (16 pages, palette navy/accent) — guide d'accompagnement non committé, à transmettre par courriel
+- `Guide_Outil_Sila_v2.docx` (~22 pages, palette navy/accent, refonte complète 2026-04-28) — guide d'accompagnement non committé, à transmettre par courriel
+- `docs/credentials_initiales_2026-04.md` — identifiants initiaux des 3 nouveaux contributeurs (Aude, Jérémy, Louis), gitignored, à transmettre à Virginie qui les distribuera
 
 **Journal complet :** voir [WORKING_LOG.md](WORKING_LOG.md).
 
@@ -79,18 +106,27 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - Créer une production = créer un projet. Mêmes modules disponibles.
 
 ### Permissions (RLS) — Principe Virginie
-**Tout le monde lit tout. Personne ne modifie les documents d'un autre pays.**
+**Tout le monde lit tout. L'écriture est filtrée par pays sauf admin.**
 
-- **Lecture :** accès au projet = lecture de tout (documents, lots, livrables, équipes)
-- **Écriture :** filtrée par `country` (champ sur users, lots, documents)
-- **Budget :** lecture filtrée par org pour coproducteur/chargé, lecture totale pour admin
-- **Prestataire :** accès uniquement aux tâches/documents assignés
+Règle générale après audit complet (migration 017) :
+- **Lecture** : accès au projet = lecture de tout (documents, lots, livrables, jalons, équipes). Sauf entités sensibles (budget_lines, producer_documents, funding_sources) qui passent une barrière `has_producer_access` supplémentaire.
+- **Écriture** : admin écrit partout (any country). Coproducer + production_manager écrivent sur leur pays uniquement. Contractor : pas d'écriture sauf sur ses propres documents uploadés.
+- Les commentaires et entrées d'`activity_log` sur les entités sensibles sont aussi filtrés par `has_producer_access` — pas de fuite par effet de bord.
 
 Quatre niveaux d'accès (access_level dans project_members) :
-1. `admin` — Virginie. Lecture tout, écriture son pays, budget tous.
-2. `coproducer` — Mathieu (DE), Hélène (PB). Lecture tout, écriture son pays, budget son org.
-3. `production_manager` — William, Anne-Lise. Lecture tout, écriture son pays, budget son org (lecture seule).
-4. `contractor` — Voulez-Vous, Antoine. Uniquement tâches/docs assignés.
+1. `admin` — Virginie. Lecture tout. Écriture partout. Espace Producteurs total.
+2. `coproducer` — Mathieu (DE), Marie (DE), Hélène (PB). Lecture tout. Écriture sur son pays. Espace Producteurs si `has_producer_access` (Marie et Hélène : oui).
+3. `production_manager` — William (DE), Anne-Lise (PB), Pierre Michaud (JAXA). Lecture tout. Écriture sur son pays sur tableaux/jalons/livrables/documents. Lecture seule sur budget_lines et funding_sources. Espace Producteurs si `has_producer_access` (William et Anne-Lise : oui).
+4. `contractor` — Raphaël (Voulez-Vous), Antoine (Freelance), Aude (Indépendante), Jérémy + Louis (Neek Studio). Uniquement les documents qu'ils ont uploadés. Pas d'accès Espace Producteurs.
+
+### Espace Producteurs — couche de confidentialité
+
+Drapeau `project_members.has_producer_access` (boolean, default false) qui se superpose au modèle `access_level`.
+
+- **Lecture** : sans accès, l'utilisateur ne voit pas la section dans la sidebar (rendu conditionnel) ; côté serveur, RLS bloque tout SELECT sur budget_lines / producer_documents / funding_sources.
+- **Activity log et comments** : entrées sensibles filtrées au SELECT.
+- **Audit** : table `producer_access_log` (append-only, admin-only) consigne tout grant/revoke.
+- **Gestion** : page Paramètres → Accès Espace Producteurs (admin seulement). Toggle par membre, avec journal des 20 dernières modifications.
 
 ### Documents — Google Drive comme source
 - Les fichiers restent sur Drive. L'outil stocke : URL Drive, titre, catégorie, lot, version, country, validation_status.
@@ -101,7 +137,7 @@ Quatre niveaux d'accès (access_level dans project_members) :
 - Discord reste l'outil de communication. Pas de module chat dans l'outil.
 - M7 (Communication) retiré de la feuille de route ou réduit à un journal d'activité.
 
-## Modèle de données — 10 tables
+## Modèle de données — 16 tables
 
 ### projects
 id (uuid PK), name, description, status, created_at
@@ -122,10 +158,10 @@ id (uuid PK), project_id (FK), org_id (FK), name, director, country, status (pro
 id (uuid PK), lot_id (FK), assigned_to (FK user), title, phase (dev|shooting|post|integration|delivery), start_date, end_date, status, depends_on (FK task, nullable)
 
 ### documents
-id (uuid PK), project_id (FK), lot_id (FK, nullable), uploaded_by (FK user), title, category (contract|scenario|artistic_dossier|report|technical_deliverable|invoice), country, version (int), validation_status (draft|pending|approved|archived), drive_url, drive_file_id, created_at, updated_at
+id (uuid PK), project_id (FK), lot_id (FK, nullable), uploaded_by (FK user), title, category (contract|scenario|artistic_dossier|report|technical_deliverable|invoice|reference), folder (techno|creation|texte|divers, default 'divers'), country, version (int), validation_status (draft|pending|approved|archived), drive_url, drive_file_id, created_at, updated_at + colonnes audit (imported, imported_value, last_modified_by, last_modified_at)
 
 ### budget_lines
-id (uuid PK), project_id (FK), lot_id (FK, nullable), org_id (FK), funder_id (FK, nullable), category, planned (decimal), actual (decimal), currency, exchange_rate (decimal, nullable)
+id (uuid PK), project_id (FK), lot_id (FK, nullable), org_id (FK), funder_id (FK, nullable), code (text, nullable), category, planned (decimal), actual (decimal), currency, cost_origin (interne|apparente|externe, nullable), exchange_rate (decimal, nullable) + colonnes audit
 
 ### funders
 id (uuid PK), project_id (FK), name, country, amount (decimal), currency, status (acquired|expected|to_confirm)
@@ -133,8 +169,29 @@ id (uuid PK), project_id (FK), name, country, amount (decimal), currency, status
 ### deliverables
 id (uuid PK), funder_id (FK), title, due_date, status (to_produce|in_progress|submitted|validated), notes
 
+### milestones (depuis 003)
+id (uuid PK), project_id (FK), lot_id (FK, nullable), title, start_date, end_date (nullable — NULL = jalon ponctuel), type (depot_fonds|festival|premiere|jalon_production), country, notes, created_by (FK user), created_at + colonnes audit
+
+### project_settings (depuis 002)
+project_id (uuid PK), exchange_rate_eur_to_cad (decimal), exchange_rate_cad_to_eur (decimal — depuis 013, indépendant), exchange_rate_date (date)
+
+### exchange_rate_history (depuis 013)
+id (uuid PK), project_id (FK), rate_eur_to_cad, rate_cad_to_eur, effective_date, set_by_user_id (FK user), created_at — append-only, alimenté automatiquement par trigger sur project_settings UPDATE
+
+### comments (depuis 005)
+id (uuid PK), project_id (FK), entity_type (document|deliverable|milestone|lot|budget_line|producer_document — étendu en 009), entity_id, user_id (FK), content, created_at, updated_at
+
+### producer_documents (depuis 009)
+id (uuid PK), project_id (FK), lot_id (FK, nullable), uploaded_by (FK user), folder (assurances|legal), title, country, version, validation_status, drive_url, drive_file_id, created_at, updated_at + colonnes audit. Isolée des `documents` publics — RLS gated par `has_producer_access`.
+
+### producer_access_log (depuis 009)
+id (uuid PK), project_id (FK), target_user_id (FK user), granted_by_user_id (FK user, nullable), action (granted|revoked), created_at — append-only, admin-only
+
+### funding_sources (depuis 010)
+id (uuid PK), project_id (FK), country (CA|FR|LU), source_name, amount_eur (decimal nullable), amount_cad (decimal nullable) — les deux séparés et contractuels, status (acquired|expected), notes, sort_order + colonnes audit
+
 ### activity_log
-id (uuid PK), project_id (FK), user_id (FK), action, entity_type, entity_id, metadata (jsonb), created_at
+id (uuid PK), project_id (FK), user_id (FK), action, entity_type, entity_id, metadata (jsonb), created_at — RLS filtre les entrées sensibles (budget_line, producer_document) selon `has_producer_access`
 
 ## Phase 1 — Périmètre (3 500 $, deadline mi-mai)
 1. **Socle** — Auth, multi-tenant, RLS, infrastructure

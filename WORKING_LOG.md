@@ -1,5 +1,123 @@
 # WORKING_LOG — Gestion SILA
 
+## Session 2026-04-28 (suite) — Imports SILA, sous-dossiers, Espace Producteurs, devises duales, édition universelle, traçabilité
+
+### Objectif
+Aller bien au-delà du strict module commentaires : importer toutes les données réelles SILA (échéancier, devis SODEC, structure financière), créer une couche de confidentialité (Espace Producteurs) pour le budget et les pièces sensibles, et rendre toute donnée éditable manuellement avec traçabilité des modifications post-import. Plus une refonte du guide utilisateur.
+
+### Ce qui a été fait
+
+#### Échéancier SILA → milestones (migrations 006-007)
+- **006** : `milestones.date` → `start_date` + `end_date` nullable. Trigger `log_activity` adapté. Index `start_date_idx` + `end_date_idx`. CHECK `end_date >= start_date`.
+- **007** : suppression des 6 jalons démo, import de **16 jalons réels** depuis `docs/SILA_Échéancier_Gantt_Avril2026.xlsx` (15 sur Tableau IV, 1 transversal — Itération 3). 3 jalons ponctuels (`end_date NULL`) : Prototype validé (30 mai), Lancement Venise (24 août festival), Première publique (1ᵉʳ oct.). Les 13 autres en plages mois-de-début → mois-de-fin. Statut « En cours / Complété / À venir » conservé en notes, préfixé par « Indication échéancier : ».
+- UI Calendrier adapté : `formatDateRange()` qui gère ponctuel, plage même année (« 01 mai – 30 juin 2026 »), plage cross-year. NewMilestoneModal et MilestoneDetailModal mis à jour pour deux dates. Filtres conservés.
+
+#### Renommage Lot → Tableau (UI seulement)
+- 14 fichiers, 29 strings remplacés. Côté DB / routes / noms de fichiers et composants : conservés tels quels (`lots`, `lot_id`, `/lots`, `Lots.jsx`, `LotDetail.jsx`, `ByLotView.jsx`).
+- `GUIDE_VIRGINIE.docx` (16 pages, palette navy) updated via python-docx en respectant le formatage Word — 19 paragraphes touchés, 0 faux positif. Phrase ambiguë « ventile par tableau » réécrite en « regroupe les lignes par tableau » (option c choisie par l'utilisateur).
+
+#### Documents avec sous-dossiers (migration 008)
+- Colonne `documents.folder` (text NOT NULL default `'divers'`) avec CHECK sur 4 valeurs : techno / creation / texte / divers.
+- Index `(project_id, folder)`.
+- Mapping `category → folder` documenté en SQL (technical_deliverable→techno, artistic_dossier+scenario→creation, contract+report→texte, invoice→divers).
+- UI Documents refactorée en **vue à 2 niveaux** : `/documents` = grille de 4 cards avec compteurs et icônes (⚙️🎨📄📁), `/documents/:folder` = liste filtrée avec breadcrumb cliquable. Filtres conservés (Tableau, Statut, Pays) — la catégorie devient implicite par le sous-dossier.
+- Modal de création étendue : champ Sous-dossier obligatoire (pré-rempli si on est entré via un sous-dossier, sinon dérivé de la catégorie via `folderForCategory()`).
+
+#### Espace Producteurs confidentiel (migration 009)
+- **Modèle** : drapeau `project_members.has_producer_access` (boolean default false). Toute lecture/écriture sur `budget_lines`, `producer_documents`, et toute entrée d'`activity_log` ou `comments` référençant ces entités passe par une barrière `has_producer_access(project_id)` AVANT les règles fines existantes.
+- **Tables nouvelles** : `producer_access_log` (audit append-only, admin-only) et `producer_documents` (sous-dossiers `assurances` / `legal`, isolée des documents publics).
+- **RLS hardening** sur `budget_lines` : barrière `has_producer_access` ajoutée en plus des règles existantes (admin écrit tout, coproducer écrit son org, production_manager lit son org seulement).
+- **Activity log** : entrées sur `budget_line` et `producer_document` filtrées pour les non-autorisés via la même barrière. Ne fuite pas par effet de bord.
+- **Comments** : entity_type `producer_document` ajouté (CHECK constraint résolue dynamiquement via `do block` car nom auto-généré). Filtre RLS étendu.
+- **5 personnes initialisées** : Virginie, Marie, William, Hélène, Anne-Lise. Pierre Michaud (dev outils) et autres restent à false.
+- **UI** : sidebar split — Budget retiré du nav principal, section « Espace Producteurs » conditionnée à `hasProducerAccess` (avec icône 🔒). Routes `/espace-producteurs/{assurances,legal,budget}` + `ProducerGate` côté UI en plus du RLS serveur. Ancienne `/budget` redirige selon accès. Page `ProducerDocuments` + `NewProducerDocumentModal`. Hook `useCurrentProject` étendu avec `hasProducerAccess`. Page Paramètres : section `ProducerAccessSection` (toggle par membre + journal des 20 dernières modifs).
+
+#### Articulation budget Canada + Structure financière (migrations 010-011)
+- **010** : `budget_lines.code` (text) + `budget_lines.cost_origin` (text CHECK interne|apparente|externe). `project_settings.exchange_rate_date`. **19 lignes JAXA** importées depuis `docs/budget_canada_postes.csv` (devis SODEC, total 120 327 CAD). Postes 03 et 04 split en 2 lignes chacun (option a — split) pour conserver une cost_origin non ambiguë. Démos JAXA supprimées, démos DE et PB conservées en attendant les vrais devis France/Luxembourg.
+- Table `funding_sources` (id, country, source_name, **amount_eur ET amount_cad** séparés, status, notes, sort_order) avec RLS gated par `has_producer_access`. **22 sources** importées depuis `docs/structure_financiere.csv` (CA: 2, FR: 16, LU: 4 — total 997 886,36 CAD).
+- **011** : taux corrigé de 1.6232 → **1.6135** (cohérent avec les `amount_cad` contractuels du CSV). Élimine les écarts artificiels FR/LU dans la vue Structure financière.
+- **UI** : `BudgetLineRow` étend les colonnes Code (avant Catégorie) + Origine (après Devise), édition inline. `ByCoproducerView` : badge SODEC (✓ « Cohérent avec devis SODEC » si total = 120 327 ± 1 CAD, ⚠ orange « Écart : X CAD » sinon). **Nouveau 4ᵉ onglet Structure financière** : 3 sections accordéon par pays, chaque section avec total CAD/EUR + badge cohérence vs budget org correspondante (CA→JAXA, FR→Dark Euphoria, LU→Poulpe Bleu). Édition inline des sources, bouton « + Source » par pays selon perms. Footer grand total consolidé.
+
+#### Ajout 3 utilisateurs + correction emails (migration 012)
+- **2 nouvelles orgs CA/CAD/contractor** : Neek Studio (prestataires Tab. IV) et Indépendante (artistes individuels — distinguée du Freelance français pour Antoine).
+- **3 nouveaux comptes** : Aude Guivarc'h (Indépendante), Jérémy Roy + Louis TB (Neek Studio). Tous `contractor`, `has_producer_access=false`. Mots de passe initiaux uniques (12 chars random) hachés via `extensions.crypt(...) + extensions.gen_salt('bf')` (le prefix `extensions.` est nécessaire en contexte migration, contrairement au seed).
+- **4 emails corrigés** sur les utilisateurs existants : Mathieu (mathieu@→mrozieres@), William (william@→wboard@), Hélène (helene@poulpebleu→helenewalland@gmail), Anne-Lise (anne-lise@poulpebleu→millerannelise@gmail). Marie et Raphaël inchangés. Mots de passe préservés (UPDATE auth.users.email seulement).
+- **Identifiants initiaux** dans `docs/credentials_initiales_2026-04.md` (gitignored). À transmettre à Virginie. Le `.gitignore` étendu avec `docs/credentials_initiales_*.md` et `GUIDE_VIRGINIE*.docx`.
+- CSVs et xlsx de `docs/` ajoutés au repo (sources référencées par les migrations).
+
+#### Édition universelle + double affichage CAD/EUR — 3 commits structurés (migrations 013-018)
+
+##### Commit 1/3 — fondations devises (migration 013)
+- `project_settings.exchange_rate_cad_to_eur` (= 0.6198 pour SILA). **Indépendant** d'`eur_to_cad` — pas calculé l'un de l'autre, conformément au devis (1/1.6135 = 0.61977… qui s'arrondit à 0.6198 ; les deux valeurs coexistent).
+- Table `exchange_rate_history` + trigger `log_exchange_rate_change` AFTER UPDATE qui audit chaque modif de taux.
+- `src/lib/currency.js` : `convertAmount`, `formatOne`, `formatDual`, `formatDualString`. Conversion **directionnelle** (eurToCad pour EUR→CAD, cadToEur pour CAD→EUR), respect des deux taux indépendants.
+- Hook `useExchangeRates(projectId)` réutilisable.
+- **Application UI** : `BudgetLineRow.AmountCell` (montant native gras + dérivé gris empilé) sur les 4 vues Budget. `Funder card` Livrables passe en double affichage. Section Paramètres → Taux de change : édition combinée des 2 taux + date d'effet + historique des 20 derniers changements. `EditRatesModal` réutilisable, ouvert depuis Budget header (admin) en plus de Paramètres.
+
+##### Commit 2/3 — édition manuelle universelle (migration 014)
+- Policy `users_update_admin` : admin de projet peut modifier tout profil utilisateur (s'ajoute à `users_update_self`).
+- **5 modals d'édition** : `EditMilestoneModal`, `EditDocumentModal`, `EditProducerDocumentModal` (séparé du précédent — pas de catégorie, folders distincts assurances/legal), `EditDeliverableModal`, `EditMemberModal`.
+- **Extensions inline** : `BudgetLineRow` accepte maintenant `currency` (select CAD/EUR) et `org_id` (admin only — réaffectation à une autre org). `StructureFinanciereView.SourceRow` accepte `country` (admin only — réaffectation pays).
+- **Page Équipe** refondée : bouton « Modifier » sur chaque card. `EditMemberModal` 2 modes — self (full_name + role) ou admin (full_name + role + email + country + org_id + access_level avec garde-fou « pas son propre access_level »). L'email modifié ici est `public.users.email` (affichage) ; l'email de connexion `auth.users.email` reste géré séparément (note dans le modal).
+
+##### Retours Virginie commit 2 — corrections (migrations 015-017)
+- **015** : fix RLS `deliverables`. Avant : INSERT/UPDATE/DELETE exigeaient `funder_country = current_user_country` pour TOUS les rôles, sans escape admin. Conséquence : Virginie (CA) ne pouvait modifier que les livrables SODEC, pas les FR/LU — UPDATE renvoyait 0 row affected sans erreur (silencieux). Refactor : admin échappe au filtre country, coproducer/production_manager filtrés par funder.country.
+- **016** : ajout catégorie `'reference'` dans `documents.category` CHECK (résolution dynamique du nom auto-généré via do-block). Label « Référence », badge cyan, mapping `category → folder = 'techno'` par défaut.
+- **017** : audit holistique des RLS d'écriture sur 7 tables. Deux bugs systémiques corrigés : (1) admin sans escape sur `lots`, `tasks`, `documents`, `producer_documents` ; (2) `production_manager` exclu des rôles écrivants sur `funders`, `milestones`, `deliverables`. Règle uniforme : admin écrit partout, coproducer + production_manager écrivent sur leur pays. `budget_lines` et `funding_sources` non touchés (production_manager y reste read-only par design — Espace Producteurs).
+- UI `MilestoneDetailModal.canEdit` étendu pour inclure `production_manager` (cohérent avec RLS 017).
+- Bonus UX : bouton « Réinitialiser les filtres » sur la page Documents quand un filtre est actif.
+
+##### Commit 3/3 — traçabilité (migration 018)
+- **4 colonnes audit** sur 5 tables (milestones, budget_lines, funding_sources, documents, producer_documents) : `imported` (bool default false), `imported_value` (jsonb), `last_modified_by` (FK users), `last_modified_at` (timestamptz).
+- **Fonction trigger générique** `track_imported_changes()` BEFORE UPDATE :
+  - Si `OLD.imported = true` : capture `OLD.field` dans `imported_value` au PREMIER changement de chaque champ surveillé. Ne réécrase pas les modifs ultérieures (préserve la valeur d'origine de l'import, pas une valeur intermédiaire).
+  - Si `OLD.imported = false` : track juste `last_modified_by/at` sur changement de champ surveillé.
+  - **Toujours autoritatif côté serveur** : ignore toute valeur que le client tenterait de mettre dans `imported_value` ou `last_modified_*` directement.
+  - Champs surveillés définis par `TG_TABLE_NAME` dans un CASE.
+- **Backfill `imported = true`** sur les enregistrements issus des migrations : 16 milestones (007), 19 budget_lines JAXA (010), 22 funding_sources (010). Matching par préfixe d'UUID — les UUIDs UI-créés (gen_random_uuid) ne matchent pas.
+- **UI** : composant `ModifiedBadge` (petit picto crayon ambre) avec tooltip HTML title= : « Modifié [date relative] par [user]. Valeurs d'origine : champ → valeur ». Skip explicite des UUIDs (lot_id, org_id) qui s'affichent comme « (modifié) » plutôt que la valeur brute. Map de libellés humains dans `src/lib/auditLabels.js`. Câblé sur les 5 listes (Calendrier, Budget, Structure financière, Documents, ProducerDocuments) à côté du libellé principal de chaque ligne.
+
+#### Refonte du guide → `Guide_Outil_Sila_v2.docx`
+- Refonte complète via python-docx, ~22 pages estimées, 286 paragraphes, 13 tableaux. Couverture restylée : « Guide » + « Outil Sila » + « v2 » (multi-tenant assumed — l'outil est désormais positionné comme produit, pas comme guide d'une production spécifique). Mention « Héroïnes Arctiques » retirée de la couverture, conservée dans le contenu où pertinent.
+- Sections nouvelles vs ancien guide : Documents avec sous-dossiers, Espace Producteurs (Assurances + Légal + Budget), Articulation budget Canada SODEC, Structure financière, Double affichage CAD/EUR, Édition manuelle universelle, Traçabilité (picto ✎), Section Taux de change dans Paramètres.
+- 7 scénarios concrets avec workflows pas-à-pas. Annexe « Repères rapides » : URL, statuts, symboles.
+- Backups conservés : `GUIDE_VIRGINIE.backup-20260428-151645.docx` (avant Lot→Tableau) et `GUIDE_VIRGINIE.backup-before-rewrite-20260428-181633.docx` (juste avant la refonte).
+- `.gitignore` étendu avec `Guide_Outil_Sila*.docx`.
+
+### Décisions techniques
+
+- **Périodes vs dates ponctuelles pour milestones** : nullabilité de `end_date` choisie après itération avec Virginie. NULL = jalon ponctuel (livraison Venise un jour précis), non-NULL = plage. UI : `formatDateRange()` retourne juste la date si `end` est null. Plus propre que l'option (b) initiale (`end = start` pour les ponctuels) qui aurait perdu la distinction.
+- **Espace Producteurs comme couche d'invisibilité, pas juste lecture interdite** : la sidebar conditionne le rendu sur `hasProducerAccess`. Une personne sans accès ne voit même pas que la section existe. Côté serveur, RLS bloque même les SELECT sur `budget_lines` / `producer_documents` / `funding_sources`. Les commentaires sur ces entités et les entrées d'`activity_log` correspondantes sont aussi filtrés. Aucune fuite par effet de bord.
+- **Deux taux EUR↔CAD indépendants** plutôt qu'un seul + inverse calculé. Demande Virginie. Le devis SODEC fixe les conversions contractuelles à un taux légèrement différent du taux courant ; l'inverse mathématique strict introduirait des micro-écarts. Les deux taux sont stockés indépendamment et utilisés directionnellement.
+- **`amount_eur` ET `amount_cad` séparés sur funding_sources** : montants contractuels figés. Si on calculait à la volée avec le taux courant, modifier le taux changerait rétroactivement les montants des sources passées — pas voulu. Quand un seul est saisi, l'autre est calculé pour comblement (via le taux courant) mais pas écrit en base.
+- **Split de l'édition universelle en 3 commits** plutôt que tout d'un coup. Recommandé par moi-même au début de la demande pour permettre un test intermédiaire après les fondations devises (visible immédiatement par Virginie) avant l'édition (fonctionnelle) puis la traçabilité (raffinement). Virginie a confirmé chaque étape avant le suivant.
+- **Trigger BEFORE UPDATE générique** pour la traçabilité (TG_TABLE_NAME → array of watched fields) plutôt qu'un trigger par table. Une fonction unique, 5 triggers (un par table) pointant dessus. Évite la duplication mais reste lisible (le CASE est explicite).
+- **Préservation de la valeur d'origine** dans `imported_value` : si un champ est modifié plusieurs fois, `imported_value[field]` garde la valeur du PREMIER changement (= valeur de l'import), pas la valeur intermédiaire la plus récente. Le but est de toujours retrouver d'où on est parti.
+- **`production_manager` retiré du write sur deliverables en 015 puis réintégré en 017** — j'ai mal interprété la spec « production_manager : lecture seule » au moment d'écrire 015. Virginie a confirmé que la règle générale prime : « tout le monde lit, l'écriture est filtrée par pays sauf admin ». Le production_manager appartient au périmètre des rôles écrivants sur leur pays. Migration 017 a fait l'audit complet et réintégré.
+- **`mrozieres@dark-euphoria.com`, `wboard@dark-euphoria.com`, `helenewalland@gmail.com`, `millerannelise@gmail.com`** — vrais emails fournis par Virginie. Marie et Raphaël déjà corrects dans le seed initial. Hélène et Anne-Lise sont passées de `@poulpebleu.com` à `@gmail.com` (probablement Poulpe Bleu n'a pas le domaine au quotidien — préfère gmail).
+- **`extensions.crypt(...)` qualifié** dans la migration 012 : sans le prefix, `gen_salt('unknown')` échoue parce que pgcrypto n'est pas dans le `search_path` au moment où Supabase exécute les migrations (contrairement au seed.sql qui hérite du search_path interactif).
+
+### Problèmes rencontrés
+
+- **RLS UPDATE silencieux** : le bug 015 sur deliverables a été non détecté en interactif parce que Postgres ne renvoie pas d'erreur quand RLS filtre les lignes — l'UPDATE rapporte juste « 0 row affected ». Côté Supabase JS, `{ error: null, data: null }` ressemble à un succès. Virginie a observé « rien ne se passe quand je clique Enregistrer ». Diagnostic via le pattern : pour les lignes que je peux voir mais que je ne peux pas modifier, l'UPDATE est silencieux. À retenir comme cas tordu côté UX.
+- **Bug systémique « admin sans escape »** sur 4 tables (lots, tasks, documents, producer_documents) découvert seulement par l'audit déclenché par le retour Virginie sur deliverables. Toutes ces tables avaient été écrites avec le pattern `('admin','coproducer','production_manager') AND country = current_user_country` qui s'applique à tous les rôles, admin compris. Si Virginie n'avait pas testé sur des livrables FR, on n'aurait pas remarqué. Migration 017 fait l'audit complet en une passe.
+- **`crypt()` indisponible en migration** : la fonction live dans `extensions.crypt`, et les migrations sont exécutées avec un search_path qui n'inclut pas `extensions`. Le seed (qui passe par `psql` interactif) n'a pas ce souci. Documenter pour les futures migrations qui touchent à auth.users.
+- **CHECK constraints auto-nommés** par Postgres : pour les modifier (ajout d'enum value), il faut résoudre le nom dynamiquement via `pg_constraint`. Pattern utilisé dans 009 (comments.entity_type) et 016 (documents.category) — `do block` qui SELECT puis EXECUTE format(...).
+- **Filename matching sur les UUIDs** pour le backfill `imported = true` : utilisé `LIKE '77...0001%'` pour matcher les milestones de 007. Convient parce que les imports utilisent des UUIDs déterministes structurés et les UI-créés utilisent `gen_random_uuid()` qui ne matchent pas les patterns. Si on ouvrait à des imports plus tardifs, mieux vaudrait un flag explicite passé par les inserts (`imported=true` directement dans l'INSERT) plutôt qu'un backfill par regex.
+- **Cache navigateur côté Virginie** : après le commit 1/3 (devises), elle voyait toujours « 115 000 $CA » au lieu de « 115 000 CAD / 71 277 EUR ». Diagnostic : cache navigateur non invalidé (Netlify avait bien déployé). Dans les retours futurs, mentionner systématiquement « hard reload Ctrl+F5 / Cmd+Shift+R » avant de chercher un bug de fond.
+- **Questions techniques pour Virginie** : retour clair de Pierre — utiliser un langage non technique. Pas de slashes URL (`/budget`), pas de jargon (`badge SODEC`, `cellules planned/actual`, `redirige`). Saved en mémoire pour les futures sessions.
+
+### Prochaines étapes
+
+1. **Tester en prod avec William et Anne-Lise** — la migration 017 leur réintègre les droits d'écriture sur leur pays. Voir si tout fonctionne (modifier un jalon FR pour William, un livrable FilmFund LU pour Anne-Lise) sans régression.
+2. **Hide form pour contractors** sur les entity_types qu'ils ne peuvent pas commenter (toujours non fait depuis Phase 2.5). Aujourd'hui le formulaire s'affiche et l'erreur RLS arrive après le submit.
+3. **Édition d'un funder** (le bailleur lui-même, pas ses livrables) — actuellement read-only dans la card de l'accordéon Livrables. Si Virginie veut modifier le montant SODEC ou le statut Pictanovo (Acquis ↔ Pressenti), elle ne peut pas. À ajouter si demandé.
+4. **Notifications email Resend** (Phase 3) — rappels échéances, validations en attente, nouveaux commentaires, changements de taux de change.
+5. **Page de gestion d'équipe pour admin** — créer un nouvel utilisateur depuis l'UI plutôt que par migration SQL. Aujourd'hui l'ajout passe par moi via une migration. Pas critique tant que les ajouts sont rares.
+6. **Transmettre `Guide_Outil_Sila_v2.docx` et `docs/credentials_initiales_2026-04.md`** à Virginie par courriel. Le guide est complet, les credentials sont à transmettre aux 3 nouveaux contributeurs avec consigne de changer de mot de passe.
+7. **Bundle JS à 622 KB** — au-delà du seuil de 500 KB de Vite. Considérer `React.lazy()` sur Budget (avec ses 4 vues) et Calendrier (avec ses modals) pour code splitting.
+8. **Vérification post-prod** : en théorie les 22 sources de financement et 19 lignes de budget Canada sont les vrais montants contractuels. Si Virginie corrige des chiffres (ce qui arrivera), le picto ✎ ambre rendra ces corrections visibles. Voir si le comportement est intuitif après quelques semaines d'usage.
+
 ## Session 2026-04-22 — Init projet, schéma Supabase, page Production
 
 ### Objectif
