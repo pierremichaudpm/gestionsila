@@ -313,11 +313,18 @@ function RateBadge({ rate, isAdmin, editing, draft, onEdit, onCancel, onChange, 
     )
   }
 
+  // Affichage de l'inverse pour mémoire (utile aux producteurs côté CAD).
+  const inverse = rate ? (1 / Number(rate)) : null
   return (
-    <div className="inline-flex items-center gap-2 text-xs text-slate-500">
+    <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
       <span>
-        Taux : <strong className="text-slate-900 tabular-nums">{rate ? `1 EUR = ${rate} CAD` : 'Non défini'}</strong>
+        Taux : <strong className="text-slate-900 tabular-nums">{rate ? `1 EUR = ${Number(rate).toFixed(4)} CAD` : 'Non défini'}</strong>
       </span>
+      {inverse ? (
+        <span className="text-slate-400 tabular-nums">
+          (1 CAD = {inverse.toLocaleString('fr-FR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })} EUR)
+        </span>
+      ) : null}
       {isAdmin ? (
         <button type="button" onClick={onEdit} className="text-brand-blue hover:underline">
           {rate ? 'Modifier' : 'Définir'}
