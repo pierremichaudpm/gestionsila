@@ -15,6 +15,7 @@ import {
   VALIDATION_STATUS_OPTIONS,
 } from '../lib/format'
 import NewProducerDocumentModal from '../components/producers/NewProducerDocumentModal.jsx'
+import EditProducerDocumentModal from '../components/producers/EditProducerDocumentModal.jsx'
 import CommentThread from '../components/comments/CommentThread.jsx'
 import CommentBadge from '../components/comments/CommentBadge.jsx'
 import { useCommentCounts } from '../components/comments/useCommentCounts.js'
@@ -33,6 +34,7 @@ export default function ProducerDocuments() {
   const [error, setError] = useState(null)
   const [filters, setFilters] = useState({ lot: '', status: '', country: '' })
   const [modalOpen, setModalOpen] = useState(false)
+  const [editingDoc, setEditingDoc] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [actionError, setActionError] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
@@ -178,6 +180,7 @@ export default function ProducerDocuments() {
                   profile={profile}
                   accessLevel={accessLevel}
                   onAction={handleAction}
+                  onEdit={(d) => setEditingDoc(d)}
                   commentCount={commentCounts.get(doc.id) ?? 0}
                   expanded={expandedId === doc.id}
                   onToggle={() => setExpandedId(prev => prev === doc.id ? null : doc.id)}
@@ -202,6 +205,16 @@ export default function ProducerDocuments() {
           setModalOpen(false)
           setReloadKey(k => k + 1)
         }}
+      />
+
+      <EditProducerDocumentModal
+        open={!!editingDoc}
+        doc={editingDoc}
+        lots={lots}
+        accessLevel={accessLevel}
+        onClose={() => setEditingDoc(null)}
+        onSaved={() => { setEditingDoc(null); setReloadKey(k => k + 1) }}
+        onDeleted={() => { setEditingDoc(null); setReloadKey(k => k + 1) }}
       />
     </div>
   )
@@ -246,11 +259,12 @@ function FilterSelect({ label, value, onChange, children }) {
   )
 }
 
-function ProducerDocumentRow({ doc, profile, accessLevel, onAction, commentCount, expanded, onToggle, projectId, onCommentChange }) {
+function ProducerDocumentRow({ doc, profile, accessLevel, onAction, onEdit, commentCount, expanded, onToggle, projectId, onCommentChange }) {
   const v = validationStatus(doc.validation_status)
   const isMyCountry = profile?.country === doc.country
   const isAdmin = accessLevel === 'admin'
   const isApprover = accessLevel === 'admin' || accessLevel === 'coproducer'
+  const canEdit = isAdmin || ((accessLevel === 'coproducer' || accessLevel === 'production_manager') && isMyCountry)
 
   let action = null
   if (doc.validation_status === 'draft' && isMyCountry) {
@@ -299,6 +313,15 @@ function ProducerDocumentRow({ doc, profile, accessLevel, onAction, commentCount
               className="mr-2 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:border-brand-blue hover:text-brand-blue"
             >
               {action.label}
+            </button>
+          ) : null}
+          {canEdit && onEdit ? (
+            <button
+              type="button"
+              onClick={() => onEdit(doc)}
+              className="mr-2 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:border-brand-blue hover:text-brand-blue"
+            >
+              Modifier
             </button>
           ) : null}
           <a

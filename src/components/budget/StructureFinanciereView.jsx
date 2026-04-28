@@ -211,6 +211,7 @@ export default function StructureFinanciereView({
                             key={source.id}
                             source={source}
                             editable={editable}
+                            isAdmin={accessLevel === 'admin'}
                             onUpdate={handleUpdate}
                             onDelete={handleDelete}
                           />
@@ -306,7 +307,7 @@ function GrandTotalsFooter({ sourcesCad, sourcesEur, budgetCad }) {
   )
 }
 
-function SourceRow({ source, editable, onUpdate, onDelete }) {
+function SourceRow({ source, editable, isAdmin, onUpdate, onDelete }) {
   const [draft, setDraft] = useState({
     source_name: source.source_name,
     amount_eur:  source.amount_eur ?? '',
@@ -422,18 +423,32 @@ function SourceRow({ source, editable, onUpdate, onDelete }) {
         )}
       </td>
       <td className="px-3 py-2 text-right">
-        {editable ? (
-          <button
-            type="button"
-            onClick={() => onDelete(source.id)}
-            title="Supprimer la source"
-            className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9.5h5L11 4M7 7v4M9 7v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-            </svg>
-          </button>
-        ) : null}
+        <div className="flex items-center justify-end gap-1">
+          {editable && isAdmin ? (
+            <select
+              value={source.country}
+              onChange={(e) => onUpdate(source.id, { country: e.target.value })}
+              title="Réaffecter à un autre pays (admin)"
+              className="rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-slate-600 hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+            >
+              <option value="CA">🇨🇦 CA</option>
+              <option value="FR">🇫🇷 FR</option>
+              <option value="LU">🇱🇺 LU</option>
+            </select>
+          ) : null}
+          {editable ? (
+            <button
+              type="button"
+              onClick={() => onDelete(source.id)}
+              title="Supprimer la source"
+              className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9.5h5L11 4M7 7v4M9 7v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+              </svg>
+            </button>
+          ) : null}
+        </div>
       </td>
     </tr>
   )

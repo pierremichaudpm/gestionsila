@@ -14,7 +14,7 @@ const COST_ORIGIN_LABEL = {
   externe:   'Externe',
 }
 
-export default function BudgetLineRow({ line, lots, editable, onUpdate, onDelete, extraCells, rates }) {
+export default function BudgetLineRow({ line, lots, orgs, isAdmin, editable, onUpdate, onDelete, extraCells, rates }) {
   const [draft, setDraft] = useState(initialDraft(line))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -61,6 +61,18 @@ export default function BudgetLineRow({ line, lots, editable, onUpdate, onDelete
     const v = e.target.value || null
     setDraft(d => ({ ...d, cost_origin: e.target.value }))
     if (v !== (line.cost_origin ?? null)) commit({ cost_origin: v })
+  }
+
+  function onCurrencyChange(e) {
+    const v = e.target.value
+    setDraft(d => ({ ...d, currency: v }))
+    if (v !== line.currency) commit({ currency: v })
+  }
+
+  function onOrgChange(e) {
+    const v = e.target.value
+    setDraft(d => ({ ...d, org_id: v }))
+    if (v !== line.org_id) commit({ org_id: v })
   }
 
   async function handleDelete() {
@@ -137,7 +149,20 @@ export default function BudgetLineRow({ line, lots, editable, onUpdate, onDelete
           rates={rates}
         />
       </td>
-      <td className="px-3 py-2 text-xs text-slate-500">{line.currency}</td>
+      <td className="px-3 py-2 text-xs text-slate-500">
+        {editable ? (
+          <select
+            value={draft.currency}
+            onChange={onCurrencyChange}
+            className="rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-slate-600 hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          >
+            <option value="CAD">CAD</option>
+            <option value="EUR">EUR</option>
+          </select>
+        ) : (
+          line.currency
+        )}
+      </td>
       <td className="px-3 py-2">
         {editable ? (
           <select
@@ -155,19 +180,31 @@ export default function BudgetLineRow({ line, lots, editable, onUpdate, onDelete
       </td>
       {extraCells}
       <td className="px-3 py-2 text-right">
-        {editable ? (
-          <button
-            type="button"
-            onClick={handleDelete}
-            title="Supprimer la ligne"
-            className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9.5h5L11 4M7 7v4M9 7v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-            </svg>
-          </button>
-        ) : null}
-        {error ? <span className="ml-2 text-xs text-red-600" title={error}>!</span> : null}
+        <div className="flex items-center justify-end gap-1">
+          {editable && isAdmin && orgs ? (
+            <select
+              value={draft.org_id}
+              onChange={onOrgChange}
+              title="Réaffecter à une autre organisation (admin)"
+              className="rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-slate-600 hover:border-slate-200 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+            >
+              {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          ) : null}
+          {editable ? (
+            <button
+              type="button"
+              onClick={handleDelete}
+              title="Supprimer la ligne"
+              className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9.5h5L11 4M7 7v4M9 7v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+              </svg>
+            </button>
+          ) : null}
+          {error ? <span className="text-xs text-red-600" title={error}>!</span> : null}
+        </div>
       </td>
     </tr>
   )
@@ -181,6 +218,8 @@ function initialDraft(line) {
     actual:      line.actual,
     lot_id:      line.lot_id ?? '',
     cost_origin: line.cost_origin ?? '',
+    currency:    line.currency,
+    org_id:      line.org_id,
   }
 }
 

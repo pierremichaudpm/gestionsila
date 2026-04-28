@@ -13,13 +13,16 @@ import {
   funderStatus,
   toneClass,
 } from '../lib/format'
+import { useAuth } from '../lib/AuthProvider.jsx'
 import NewDeliverableModal from '../components/livrables/NewDeliverableModal.jsx'
+import EditDeliverableModal from '../components/livrables/EditDeliverableModal.jsx'
 import CommentThread from '../components/comments/CommentThread.jsx'
 import CommentBadge from '../components/comments/CommentBadge.jsx'
 import { useCommentCounts } from '../components/comments/useCommentCounts.js'
 
 export default function Livrables() {
-  const { projectId, loading: projectLoading } = useCurrentProject()
+  const { projectId, accessLevel, loading: projectLoading } = useCurrentProject()
+  const { profile } = useAuth()
   const { rates } = useExchangeRates(projectId)
   const [funders, setFunders] = useState([])
   const [deliverables, setDeliverables] = useState([])
@@ -30,6 +33,7 @@ export default function Livrables() {
   const [reloadKey, setReloadKey] = useState(0)
   const [actionError, setActionError] = useState(null)
   const [modalFunder, setModalFunder] = useState(null)
+  const [editingDeliverable, setEditingDeliverable] = useState(null)
   const [expandedDeliverableId, setExpandedDeliverableId] = useState(null)
   const [commentBump, setCommentBump] = useState(0)
 
@@ -158,6 +162,7 @@ export default function Livrables() {
               onToggle={() => toggleOpen(f.id)}
               onAddDeliverable={() => setModalFunder(f)}
               onStatusChange={handleStatusChange}
+              onEditDeliverable={(d) => setEditingDeliverable(d)}
               commentCounts={commentCounts}
               expandedDeliverableId={expandedDeliverableId}
               onToggleExpanded={toggleDeliverableExpanded}
@@ -180,6 +185,16 @@ export default function Livrables() {
           setModalFunder(null)
           setReloadKey(k => k + 1)
         }}
+      />
+
+      <EditDeliverableModal
+        open={!!editingDeliverable}
+        deliverable={editingDeliverable}
+        funders={funders}
+        accessLevel={accessLevel}
+        onClose={() => setEditingDeliverable(null)}
+        onSaved={() => { setEditingDeliverable(null); setReloadKey(k => k + 1) }}
+        onDeleted={() => { setEditingDeliverable(null); setReloadKey(k => k + 1) }}
       />
     </div>
   )
@@ -215,7 +230,7 @@ function ToggleButton({ active, onClick, children }) {
   )
 }
 
-function FunderAccordion({ funder, rates, deliverables, open, onToggle, onAddDeliverable, onStatusChange, commentCounts, expandedDeliverableId, onToggleExpanded, projectId, onCommentChange }) {
+function FunderAccordion({ funder, rates, deliverables, open, onToggle, onAddDeliverable, onStatusChange, onEditDeliverable, commentCounts, expandedDeliverableId, onToggleExpanded, projectId, onCommentChange }) {
   const status = funderStatus(funder.status)
   return (
     <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -259,6 +274,7 @@ function FunderAccordion({ funder, rates, deliverables, open, onToggle, onAddDel
                   key={d.id}
                   deliverable={d}
                   onStatusChange={onStatusChange}
+                  onEdit={onEditDeliverable}
                   commentCount={commentCounts.get(d.id) ?? 0}
                   expanded={expandedDeliverableId === d.id}
                   onToggleExpanded={() => onToggleExpanded(d.id)}
@@ -283,7 +299,7 @@ function FunderAccordion({ funder, rates, deliverables, open, onToggle, onAddDel
   )
 }
 
-function DeliverableRow({ deliverable, onStatusChange, commentCount, expanded, onToggleExpanded, projectId, onCommentChange }) {
+function DeliverableRow({ deliverable, onStatusChange, onEdit, commentCount, expanded, onToggleExpanded, projectId, onCommentChange }) {
   const days = daysUntil(deliverable.due_date)
   const overdue = days !== null && days < 0 && !['submitted', 'validated'].includes(deliverable.status)
   return (
@@ -303,6 +319,15 @@ function DeliverableRow({ deliverable, onStatusChange, commentCount, expanded, o
             <option key={s} value={s}>{deliverableStatus(s).label}</option>
           ))}
         </select>
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={() => onEdit(deliverable)}
+            className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:border-brand-blue hover:text-brand-blue"
+          >
+            Modifier
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onToggleExpanded}

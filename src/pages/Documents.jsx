@@ -17,6 +17,7 @@ import {
   VALIDATION_STATUS_OPTIONS,
 } from '../lib/format'
 import NewDocumentModal from '../components/documents/NewDocumentModal.jsx'
+import EditDocumentModal from '../components/documents/EditDocumentModal.jsx'
 import CommentThread from '../components/comments/CommentThread.jsx'
 import CommentBadge from '../components/comments/CommentBadge.jsx'
 import { useCommentCounts } from '../components/comments/useCommentCounts.js'
@@ -37,6 +38,7 @@ export default function Documents() {
   const [sort, setSort] = useState({ key: 'updated_at', dir: 'desc' })
   const [page, setPage] = useState(0)
   const [modalOpen, setModalOpen] = useState(false)
+  const [editingDoc, setEditingDoc] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [actionError, setActionError] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
@@ -214,6 +216,7 @@ export default function Documents() {
           profile={profile}
           accessLevel={accessLevel}
           handleAction={handleAction}
+          onEdit={(doc) => setEditingDoc(doc)}
           commentCounts={commentCounts}
           expandedId={expandedId}
           setExpandedId={setExpandedId}
@@ -234,6 +237,16 @@ export default function Documents() {
           setModalOpen(false)
           setReloadKey(k => k + 1)
         }}
+      />
+
+      <EditDocumentModal
+        open={!!editingDoc}
+        doc={editingDoc}
+        lots={lots}
+        accessLevel={accessLevel}
+        onClose={() => setEditingDoc(null)}
+        onSaved={() => { setEditingDoc(null); setReloadKey(k => k + 1) }}
+        onDeleted={() => { setEditingDoc(null); setReloadKey(k => k + 1) }}
       />
     </div>
   )
@@ -298,6 +311,7 @@ function ListView({
   profile,
   accessLevel,
   handleAction,
+  onEdit,
   commentCounts,
   expandedId,
   setExpandedId,
@@ -341,6 +355,7 @@ function ListView({
                     profile={profile}
                     accessLevel={accessLevel}
                     onAction={handleAction}
+                    onEdit={onEdit}
                     commentCount={commentCounts.get(doc.id) ?? 0}
                     expanded={expandedId === doc.id}
                     onToggle={() => setExpandedId(prev => prev === doc.id ? null : doc.id)}
@@ -432,11 +447,12 @@ function SortHeader({ label, sortKey, sort, onClick }) {
   )
 }
 
-function DocumentRow({ doc, profile, accessLevel, onAction, commentCount, expanded, onToggle, projectId, onCommentChange }) {
+function DocumentRow({ doc, profile, accessLevel, onAction, onEdit, commentCount, expanded, onToggle, projectId, onCommentChange }) {
   const v = validationStatus(doc.validation_status)
   const isMyCountry = profile?.country === doc.country
   const isAdmin = accessLevel === 'admin'
   const isApprover = accessLevel === 'admin' || accessLevel === 'coproducer'
+  const canEdit = isAdmin || (accessLevel === 'coproducer' && isMyCountry) || (accessLevel === 'production_manager' && isMyCountry)
 
   let action = null
   if (doc.validation_status === 'draft' && isMyCountry) {
@@ -490,6 +506,15 @@ function DocumentRow({ doc, profile, accessLevel, onAction, commentCount, expand
               className="mr-2 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:border-brand-blue hover:text-brand-blue"
             >
               {action.label}
+            </button>
+          ) : null}
+          {canEdit && onEdit ? (
+            <button
+              type="button"
+              onClick={() => onEdit(doc)}
+              className="mr-2 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:border-brand-blue hover:text-brand-blue"
+            >
+              Modifier
             </button>
           ) : null}
           <a

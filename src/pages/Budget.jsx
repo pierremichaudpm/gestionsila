@@ -173,6 +173,7 @@ export default function Budget() {
           lines={lines}
           lots={lots}
           rates={rates}
+          isAdmin={isAdmin}
           canEditOrg={canEditOrg}
           onCreate={handleCreate}
           onUpdate={handleUpdate}

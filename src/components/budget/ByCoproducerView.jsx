@@ -14,6 +14,7 @@ export default function ByCoproducerView({
   lines,
   lots,
   rates,
+  isAdmin,
   canEditOrg,
   onCreate,
   onUpdate,
@@ -100,6 +101,8 @@ export default function ByCoproducerView({
                           key={line.id}
                           line={line}
                           lots={lots}
+                          orgs={orgs}
+                          isAdmin={isAdmin}
                           editable={editable}
                           rates={rates}
                           onUpdate={onUpdate}
@@ -157,7 +160,7 @@ export default function ByCoproducerView({
   )
 }
 
-function Row({ line, lots, editable, rates, onUpdate, onDelete, projectId, expanded, count, onToggleExpanded, onCommentChange }) {
+function Row({ line, lots, orgs, isAdmin, editable, rates, onUpdate, onDelete, projectId, expanded, count, onToggleExpanded, onCommentChange }) {
   const badgeCell = (
     <td className="px-3 py-2">
       <button
@@ -176,6 +179,8 @@ function Row({ line, lots, editable, rates, onUpdate, onDelete, projectId, expan
       <BudgetLineRow
         line={line}
         lots={lots}
+        orgs={orgs}
+        isAdmin={isAdmin}
         editable={editable}
         rates={rates}
         onUpdate={onUpdate}

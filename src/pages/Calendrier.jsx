@@ -13,6 +13,7 @@ import {
   MILESTONE_TYPE_OPTIONS,
 } from '../lib/format'
 import NewMilestoneModal from '../components/calendrier/NewMilestoneModal.jsx'
+import EditMilestoneModal from '../components/calendrier/EditMilestoneModal.jsx'
 import MilestoneDetailModal from '../components/calendrier/MilestoneDetailModal.jsx'
 import CommentBadge from '../components/comments/CommentBadge.jsx'
 import { useCommentCounts } from '../components/comments/useCommentCounts.js'
@@ -29,6 +30,7 @@ export default function Calendrier() {
   const [modalOpen, setModalOpen] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [detailMilestone, setDetailMilestone] = useState(null)
+  const [editMilestone, setEditMilestone] = useState(null)
   const [commentBump, setCommentBump] = useState(0)
 
   const canCreate = accessLevel === 'admin' || accessLevel === 'coproducer'
@@ -208,8 +210,24 @@ export default function Calendrier() {
         milestone={detailMilestone}
         lots={lots}
         projectId={projectId}
+        profile={profile}
+        accessLevel={accessLevel}
+        onEdit={() => {
+          setEditMilestone(detailMilestone)
+          setDetailMilestone(null)
+        }}
         onClose={() => setDetailMilestone(null)}
         onCommentChange={() => setCommentBump(b => b + 1)}
+      />
+
+      <EditMilestoneModal
+        open={!!editMilestone}
+        milestone={editMilestone}
+        lots={lots}
+        accessLevel={accessLevel}
+        onClose={() => setEditMilestone(null)}
+        onSaved={() => { setEditMilestone(null); setReloadKey(k => k + 1) }}
+        onDeleted={() => { setEditMilestone(null); setReloadKey(k => k + 1) }}
       />
     </div>
   )
