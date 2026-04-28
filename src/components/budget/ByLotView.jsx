@@ -1,6 +1,18 @@
+import { Fragment } from 'react'
 import { countryFlag, formatAmount } from '../../lib/format'
+import CommentBadge from '../comments/CommentBadge.jsx'
+import CommentThread from '../comments/CommentThread.jsx'
 
-export default function ByLotView({ orgs, lines, lots }) {
+export default function ByLotView({
+  orgs,
+  lines,
+  lots,
+  projectId,
+  commentCounts,
+  expandedLineId,
+  onToggleExpanded,
+  onCommentChange,
+}) {
   const orgsById = Object.fromEntries(orgs.map(o => [o.id, o]))
 
   const groups = []
@@ -61,19 +73,47 @@ export default function ByLotView({ orgs, lines, lots }) {
                     <th className="px-3 py-2 text-right">Prévu</th>
                     <th className="px-3 py-2 text-right">Réel</th>
                     <th className="px-3 py-2">Devise</th>
+                    <th className="px-3 py-2"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {groupLines.map(line => {
                     const org = orgsById[line.org_id]
+                    const expanded = expandedLineId === line.id
+                    const count = commentCounts.get(line.id) ?? 0
                     return (
-                      <tr key={line.id}>
-                        <td className="px-3 py-2 text-xs">{countryFlag(org?.country)} {org?.name ?? '—'}</td>
-                        <td className="px-3 py-2">{line.category}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{Number(line.planned).toLocaleString('fr-FR')}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{Number(line.actual).toLocaleString('fr-FR')}</td>
-                        <td className="px-3 py-2 text-xs">{line.currency}</td>
-                      </tr>
+                      <Fragment key={line.id}>
+                        <tr>
+                          <td className="px-3 py-2 text-xs">{countryFlag(org?.country)} {org?.name ?? '—'}</td>
+                          <td className="px-3 py-2">{line.category}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{Number(line.planned).toLocaleString('fr-FR')}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{Number(line.actual).toLocaleString('fr-FR')}</td>
+                          <td className="px-3 py-2 text-xs">{line.currency}</td>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => onToggleExpanded(line.id)}
+                              aria-expanded={expanded}
+                              className="rounded px-1.5 py-1 hover:bg-slate-100"
+                              title={expanded ? 'Masquer les commentaires' : 'Afficher les commentaires'}
+                            >
+                              <CommentBadge count={count} />
+                            </button>
+                          </td>
+                        </tr>
+                        {expanded ? (
+                          <tr className="bg-slate-50/60">
+                            <td colSpan={6} className="px-5 py-4">
+                              <CommentThread
+                                projectId={projectId}
+                                entityType="budget_line"
+                                entityId={line.id}
+                                onCountChange={onCommentChange}
+                              />
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
                     )
                   })}
                 </tbody>

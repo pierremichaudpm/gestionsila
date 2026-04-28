@@ -1,5 +1,7 @@
 import { countryFlag, formatAmount } from '../../lib/format'
 import BudgetLineRow from './BudgetLineRow.jsx'
+import CommentBadge from '../comments/CommentBadge.jsx'
+import CommentThread from '../comments/CommentThread.jsx'
 
 export default function ByCoproducerView({
   orgs,
@@ -9,6 +11,11 @@ export default function ByCoproducerView({
   onCreate,
   onUpdate,
   onDelete,
+  projectId,
+  commentCounts,
+  expandedLineId,
+  onToggleExpanded,
+  onCommentChange,
 }) {
   const orgsWithLines = orgs.filter(org =>
     org.role === 'producer' || org.role === 'coproducer' || lines.some(l => l.org_id === org.id)
@@ -64,22 +71,32 @@ export default function ByCoproducerView({
                       <th className="px-3 py-2 text-right">Réel</th>
                       <th className="px-3 py-2">Devise</th>
                       <th className="px-3 py-2"></th>
+                      <th className="px-3 py-2"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {orgLines.map(line => (
-                      <BudgetLineRow
-                        key={line.id}
-                        line={line}
-                        lots={lots}
-                        editable={editable}
-                        onUpdate={onUpdate}
-                        onDelete={onDelete}
-                      />
-                    ))}
+                    {orgLines.map(line => {
+                      const expanded = expandedLineId === line.id
+                      const count = commentCounts.get(line.id) ?? 0
+                      return (
+                        <Row
+                          key={line.id}
+                          line={line}
+                          lots={lots}
+                          editable={editable}
+                          onUpdate={onUpdate}
+                          onDelete={onDelete}
+                          projectId={projectId}
+                          expanded={expanded}
+                          count={count}
+                          onToggleExpanded={() => onToggleExpanded(line.id)}
+                          onCommentChange={onCommentChange}
+                        />
+                      )
+                    })}
                     {orgLines.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-3 py-4 text-center text-xs text-slate-400">
+                        <td colSpan={7} className="px-3 py-4 text-center text-xs text-slate-400">
                           Aucune ligne budgétaire pour cette org.
                         </td>
                       </tr>
@@ -91,6 +108,7 @@ export default function ByCoproducerView({
                       <td className="px-3 py-2 text-right tabular-nums">{Number(totalPlanned).toLocaleString('fr-FR')}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{Number(totalActual).toLocaleString('fr-FR')}</td>
                       <td className="px-3 py-2">{org.currency}</td>
+                      <td className="px-3 py-2"></td>
                       <td className="px-3 py-2"></td>
                     </tr>
                   </tfoot>
@@ -113,5 +131,45 @@ export default function ByCoproducerView({
         )
       })}
     </div>
+  )
+}
+
+function Row({ line, lots, editable, onUpdate, onDelete, projectId, expanded, count, onToggleExpanded, onCommentChange }) {
+  const badgeCell = (
+    <td className="px-3 py-2">
+      <button
+        type="button"
+        onClick={onToggleExpanded}
+        aria-expanded={expanded}
+        className="rounded px-1.5 py-1 hover:bg-slate-100"
+        title={expanded ? 'Masquer les commentaires' : 'Afficher les commentaires'}
+      >
+        <CommentBadge count={count} />
+      </button>
+    </td>
+  )
+  return (
+    <>
+      <BudgetLineRow
+        line={line}
+        lots={lots}
+        editable={editable}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+        extraCells={badgeCell}
+      />
+      {expanded ? (
+        <tr className="bg-slate-50/60">
+          <td colSpan={7} className="px-5 py-4">
+            <CommentThread
+              projectId={projectId}
+              entityType="budget_line"
+              entityId={line.id}
+              onCountChange={onCommentChange}
+            />
+          </td>
+        </tr>
+      ) : null}
+    </>
   )
 }

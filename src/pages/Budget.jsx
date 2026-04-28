@@ -4,6 +4,7 @@ import { useCurrentProject } from '../lib/useCurrentProject'
 import ByCoproducerView from '../components/budget/ByCoproducerView.jsx'
 import ConsolidatedView from '../components/budget/ConsolidatedView.jsx'
 import ByLotView from '../components/budget/ByLotView.jsx'
+import { useCommentCounts } from '../components/comments/useCommentCounts.js'
 
 export default function Budget() {
   const { projectId, accessLevel, orgId, loading: projectLoading } = useCurrentProject()
@@ -18,6 +19,17 @@ export default function Budget() {
   const [rateDraft, setRateDraft] = useState('')
   const [rateError, setRateError] = useState(null)
   const [actionError, setActionError] = useState(null)
+  const [expandedLineId, setExpandedLineId] = useState(null)
+  const [commentBump, setCommentBump] = useState(0)
+
+  const lineIds = lines.map(l => l.id)
+  const commentCounts = useCommentCounts(projectId, 'budget_line', lineIds, commentBump)
+  function toggleLineExpanded(id) {
+    setExpandedLineId(prev => prev === id ? null : id)
+  }
+  function handleCommentChange() {
+    setCommentBump(b => b + 1)
+  }
 
   const isAdmin = accessLevel === 'admin'
 
@@ -182,11 +194,35 @@ export default function Budget() {
           onCreate={handleCreate}
           onUpdate={handleUpdate}
           onDelete={handleDelete}
+          projectId={projectId}
+          commentCounts={commentCounts}
+          expandedLineId={expandedLineId}
+          onToggleExpanded={toggleLineExpanded}
+          onCommentChange={handleCommentChange}
         />
       ) : view === 'consolidated' && isAdmin ? (
-        <ConsolidatedView orgs={orgs} lines={lines} lots={lots} rate={rate} />
+        <ConsolidatedView
+          orgs={orgs}
+          lines={lines}
+          lots={lots}
+          rate={rate}
+          projectId={projectId}
+          commentCounts={commentCounts}
+          expandedLineId={expandedLineId}
+          onToggleExpanded={toggleLineExpanded}
+          onCommentChange={handleCommentChange}
+        />
       ) : view === 'byLot' ? (
-        <ByLotView orgs={orgs} lines={lines} lots={lots} />
+        <ByLotView
+          orgs={orgs}
+          lines={lines}
+          lots={lots}
+          projectId={projectId}
+          commentCounts={commentCounts}
+          expandedLineId={expandedLineId}
+          onToggleExpanded={toggleLineExpanded}
+          onCommentChange={handleCommentChange}
+        />
       ) : null}
     </div>
   )

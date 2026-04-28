@@ -1,6 +1,19 @@
+import { Fragment } from 'react'
 import { countryFlag, formatAmount } from '../../lib/format'
+import CommentBadge from '../comments/CommentBadge.jsx'
+import CommentThread from '../comments/CommentThread.jsx'
 
-export default function ConsolidatedView({ orgs, lines, lots, rate }) {
+export default function ConsolidatedView({
+  orgs,
+  lines,
+  lots,
+  rate,
+  projectId,
+  commentCounts,
+  expandedLineId,
+  onToggleExpanded,
+  onCommentChange,
+}) {
   const orgsById = Object.fromEntries(orgs.map(o => [o.id, o]))
   const lotsById = Object.fromEntries(lots.map(l => [l.id, l]))
 
@@ -51,29 +64,57 @@ export default function ConsolidatedView({ orgs, lines, lots, rate }) {
               <th className="px-3 py-2 text-right">Prévu EUR</th>
               <th className="px-3 py-2 text-right">Réel CAD</th>
               <th className="px-3 py-2 text-right">Réel EUR</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {lines.map(line => {
               const org = orgsById[line.org_id]
               const lot = lotsById[line.lot_id]
+              const expanded = expandedLineId === line.id
+              const count = commentCounts.get(line.id) ?? 0
               return (
-                <tr key={line.id} className="hover:bg-slate-50">
-                  <td className="px-3 py-2 text-xs">
-                    {countryFlag(org?.country)} {org?.name ?? '—'}
-                  </td>
-                  <td className="px-3 py-2">{line.category}</td>
-                  <td className="px-3 py-2 text-xs text-slate-600">
-                    {lot?.name ?? <span className="italic text-slate-400">Transversal</span>}
-                  </td>
-                  <td className="px-3 py-2 text-xs">{line.currency}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{Number(line.planned).toLocaleString('fr-FR')}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{Number(line.actual).toLocaleString('fr-FR')}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-600">{toCad(line.planned, line.currency).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-600">{toEur(line.planned, line.currency).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-600">{toCad(line.actual, line.currency).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-600">{toEur(line.actual, line.currency).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</td>
-                </tr>
+                <Fragment key={line.id}>
+                  <tr className="hover:bg-slate-50">
+                    <td className="px-3 py-2 text-xs">
+                      {countryFlag(org?.country)} {org?.name ?? '—'}
+                    </td>
+                    <td className="px-3 py-2">{line.category}</td>
+                    <td className="px-3 py-2 text-xs text-slate-600">
+                      {lot?.name ?? <span className="italic text-slate-400">Transversal</span>}
+                    </td>
+                    <td className="px-3 py-2 text-xs">{line.currency}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{Number(line.planned).toLocaleString('fr-FR')}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{Number(line.actual).toLocaleString('fr-FR')}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{toCad(line.planned, line.currency).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{toEur(line.planned, line.currency).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{toCad(line.actual, line.currency).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{toEur(line.actual, line.currency).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</td>
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => onToggleExpanded(line.id)}
+                        aria-expanded={expanded}
+                        className="rounded px-1.5 py-1 hover:bg-slate-100"
+                        title={expanded ? 'Masquer les commentaires' : 'Afficher les commentaires'}
+                      >
+                        <CommentBadge count={count} />
+                      </button>
+                    </td>
+                  </tr>
+                  {expanded ? (
+                    <tr className="bg-slate-50/60">
+                      <td colSpan={11} className="px-5 py-4">
+                        <CommentThread
+                          projectId={projectId}
+                          entityType="budget_line"
+                          entityId={line.id}
+                          onCountChange={onCommentChange}
+                        />
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
               )
             })}
           </tbody>
@@ -84,6 +125,7 @@ export default function ConsolidatedView({ orgs, lines, lots, rate }) {
               <td className="px-3 py-3 text-right tabular-nums">{formatAmount(totals.plannedEur, 'EUR')}</td>
               <td className="px-3 py-3 text-right tabular-nums">{formatAmount(totals.actualCad, 'CAD')}</td>
               <td className="px-3 py-3 text-right tabular-nums">{formatAmount(totals.actualEur, 'EUR')}</td>
+              <td className="px-3 py-3"></td>
             </tr>
           </tfoot>
         </table>
