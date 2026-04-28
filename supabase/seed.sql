@@ -32,7 +32,9 @@ insert into public.organizations (id, name, country, currency, role) values
   ('22222222-0000-0000-0000-000000000003', 'Poulpe Bleu Production', 'LU', 'EUR', 'coproducer'),
   ('22222222-0000-0000-0000-000000000004', 'Voulez-Vous Studio',     'FR', 'EUR', 'contractor'),
   ('22222222-0000-0000-0000-000000000005', 'Diversion Cinema',       'FR', 'EUR', 'distributor'),
-  ('22222222-0000-0000-0000-000000000006', 'Freelance',              'FR', 'EUR', 'contractor');
+  ('22222222-0000-0000-0000-000000000006', 'Freelance',              'FR', 'EUR', 'contractor'),
+  ('22222222-0000-0000-0000-000000000007', 'Neek Studio',            'CA', 'CAD', 'contractor'),
+  ('22222222-0000-0000-0000-000000000008', 'Indépendante',           'CA', 'CAD', 'contractor');
 
 -- ----------------------------------------------------------------------------
 -- Auth users (dev, mot de passe partagé bcrypt)
@@ -56,7 +58,7 @@ begin
      now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
      now(), now(), '', '', '', ''),
     ('00000000-0000-0000-0000-000000000000', '33333333-0000-0000-0000-000000000003',
-     'authenticated', 'authenticated', 'mathieu@dark-euphoria.com', pw,
+     'authenticated', 'authenticated', 'mrozieres@dark-euphoria.com', pw,
      now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
      now(), now(), '', '', '', ''),
     ('00000000-0000-0000-0000-000000000000', '33333333-0000-0000-0000-000000000004',
@@ -64,15 +66,15 @@ begin
      now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
      now(), now(), '', '', '', ''),
     ('00000000-0000-0000-0000-000000000000', '33333333-0000-0000-0000-000000000005',
-     'authenticated', 'authenticated', 'william@dark-euphoria.com', pw,
+     'authenticated', 'authenticated', 'wboard@dark-euphoria.com', pw,
      now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
      now(), now(), '', '', '', ''),
     ('00000000-0000-0000-0000-000000000000', '33333333-0000-0000-0000-000000000006',
-     'authenticated', 'authenticated', 'helene@poulpebleu.com', pw,
+     'authenticated', 'authenticated', 'helenewalland@gmail.com', pw,
      now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
      now(), now(), '', '', '', ''),
     ('00000000-0000-0000-0000-000000000000', '33333333-0000-0000-0000-000000000007',
-     'authenticated', 'authenticated', 'anne-lise@poulpebleu.com', pw,
+     'authenticated', 'authenticated', 'millerannelise@gmail.com', pw,
      now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
      now(), now(), '', '', '', ''),
     ('00000000-0000-0000-0000-000000000000', '33333333-0000-0000-0000-000000000008',
@@ -81,6 +83,18 @@ begin
      now(), now(), '', '', '', ''),
     ('00000000-0000-0000-0000-000000000000', '33333333-0000-0000-0000-000000000009',
      'authenticated', 'authenticated', 'antoine@freelance.example', pw,
+     now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
+     now(), now(), '', '', '', ''),
+    ('00000000-0000-0000-0000-000000000000', '33333333-0000-0000-0000-000000000010',
+     'authenticated', 'authenticated', 'aude@guivar.ch', pw,
+     now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
+     now(), now(), '', '', '', ''),
+    ('00000000-0000-0000-0000-000000000000', '33333333-0000-0000-0000-000000000011',
+     'authenticated', 'authenticated', 'jeremy@neek.studio', pw,
+     now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
+     now(), now(), '', '', '', ''),
+    ('00000000-0000-0000-0000-000000000000', '33333333-0000-0000-0000-000000000012',
+     'authenticated', 'authenticated', 'louis@neek.studio', pw,
      now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
      now(), now(), '', '', '', '');
 end $$;
@@ -94,19 +108,25 @@ insert into public.users (id, org_id, email, full_name, role, country) values
   ('33333333-0000-0000-0000-000000000002', '22222222-0000-0000-0000-000000000001',
    'pierre.michaud@jaxa.ca',      'Pierre Michaud',      'Dev outils',              'CA'),
   ('33333333-0000-0000-0000-000000000003', '22222222-0000-0000-0000-000000000002',
-   'mathieu@dark-euphoria.com',   'Mathieu Rozières',    'Producteur délégué',      'FR'),
+   'mrozieres@dark-euphoria.com', 'Mathieu Rozières',    'Producteur délégué',                              'FR'),
   ('33333333-0000-0000-0000-000000000004', '22222222-0000-0000-0000-000000000002',
-   'marie@dark-euphoria.com',     'Marie Point',         'Productrice',             'FR'),
+   'marie@dark-euphoria.com',     'Marie Point',         'Productrice',                                     'FR'),
   ('33333333-0000-0000-0000-000000000005', '22222222-0000-0000-0000-000000000002',
-   'william@dark-euphoria.com',   'William Board',       'Chargé de production',    'FR'),
+   'wboard@dark-euphoria.com',    'William Board',       'Chargé de production',                            'FR'),
   ('33333333-0000-0000-0000-000000000006', '22222222-0000-0000-0000-000000000003',
-   'helene@poulpebleu.com',       'Hélène Walland',      'Gérante / Productrice',   'LU'),
+   'helenewalland@gmail.com',     'Hélène Walland',      'Gérante / Productrice',                           'LU'),
   ('33333333-0000-0000-0000-000000000007', '22222222-0000-0000-0000-000000000003',
-   'anne-lise@poulpebleu.com',    'Anne-Lise Miller',    'Chargée de production',   'LU'),
+   'millerannelise@gmail.com',    'Anne-Lise Miller',    'Chargée de production',                           'LU'),
   ('33333333-0000-0000-0000-000000000008', '22222222-0000-0000-0000-000000000004',
-   'raphael@voulez-vous.studio',  'Raphaël Chênais',     'Direction technologique', 'FR'),
+   'raphael@voulez-vous.studio',  'Raphaël Chênais',     'Direction technologique',                         'FR'),
   ('33333333-0000-0000-0000-000000000009', '22222222-0000-0000-0000-000000000006',
-   'antoine@freelance.example',   'Antoine Boucherikha', 'Conception sonore',       'FR');
+   'antoine@freelance.example',   'Antoine Boucherikha', 'Conception sonore',                               'FR'),
+  ('33333333-0000-0000-0000-000000000010', '22222222-0000-0000-0000-000000000008',
+   'aude@guivar.ch',              'Aude Guivarc''h',     'Artiste — création univers visuel',               'CA'),
+  ('33333333-0000-0000-0000-000000000011', '22222222-0000-0000-0000-000000000007',
+   'jeremy@neek.studio',          'Jérémy Roy',          'Prestataire technique — interactions VR Tab. IV', 'CA'),
+  ('33333333-0000-0000-0000-000000000012', '22222222-0000-0000-0000-000000000007',
+   'louis@neek.studio',           'Louis TB',            'Prestataire technique — interactions VR Tab. IV', 'CA');
 
 -- ----------------------------------------------------------------------------
 -- Project members (équipes SILA)
@@ -122,7 +142,10 @@ insert into public.project_members (project_id, org_id, user_id, access_level, h
   ('11111111-1111-1111-1111-111111111111', '22222222-0000-0000-0000-000000000003', '33333333-0000-0000-0000-000000000006', 'coproducer',         true),  -- Hélène
   ('11111111-1111-1111-1111-111111111111', '22222222-0000-0000-0000-000000000003', '33333333-0000-0000-0000-000000000007', 'production_manager', true),  -- Anne-Lise
   ('11111111-1111-1111-1111-111111111111', '22222222-0000-0000-0000-000000000004', '33333333-0000-0000-0000-000000000008', 'contractor',         false), -- Raphaël
-  ('11111111-1111-1111-1111-111111111111', '22222222-0000-0000-0000-000000000006', '33333333-0000-0000-0000-000000000009', 'contractor',         false); -- Antoine
+  ('11111111-1111-1111-1111-111111111111', '22222222-0000-0000-0000-000000000006', '33333333-0000-0000-0000-000000000009', 'contractor',         false), -- Antoine
+  ('11111111-1111-1111-1111-111111111111', '22222222-0000-0000-0000-000000000008', '33333333-0000-0000-0000-000000000010', 'contractor',         false), -- Aude
+  ('11111111-1111-1111-1111-111111111111', '22222222-0000-0000-0000-000000000007', '33333333-0000-0000-0000-000000000011', 'contractor',         false), -- Jérémy
+  ('11111111-1111-1111-1111-111111111111', '22222222-0000-0000-0000-000000000007', '33333333-0000-0000-0000-000000000012', 'contractor',         false); -- Louis
 
 -- ----------------------------------------------------------------------------
 -- Lots (5 tableaux SILA)

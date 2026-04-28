@@ -34,3 +34,8 @@ dist-ssr
 # Supabase
 supabase/.temp
 supabase/.branches
+
+# Identifiants initiaux (à transmettre par courriel, jamais commités)
+docs/credentials_initiales_*.md
+GUIDE_VIRGINIE.docx
+GUIDE_VIRGINIE.backup-*.docx
