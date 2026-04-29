@@ -106,6 +106,7 @@ export default function Equipe() {
               org={group.org}
               members={group.members}
               canEdit={canEdit}
+              isAdmin={isAdmin}
               onEdit={(m) => setEditingMember(m)}
             />
           ))}
@@ -125,7 +126,7 @@ export default function Equipe() {
   )
 }
 
-function OrgSection({ org, members, canEdit, onEdit }) {
+function OrgSection({ org, members, canEdit, isAdmin, onEdit }) {
   return (
     <section>
       <div className="mb-3 flex items-baseline gap-2">
@@ -142,6 +143,7 @@ function OrgSection({ org, members, canEdit, onEdit }) {
             key={m.id}
             member={m}
             editable={canEdit(m)}
+            isAdmin={isAdmin}
             onEdit={() => onEdit(m)}
           />
         ))}
@@ -150,9 +152,29 @@ function OrgSection({ org, members, canEdit, onEdit }) {
   )
 }
 
-function MemberCard({ member, editable, onEdit }) {
+function MemberCard({ member, editable, isAdmin, onEdit }) {
   const access = accessLevelLabel(member.access_level)
   const user = member.user
+  const [inviteState, setInviteState] = useState('idle') // idle | sending | sent | error
+  const [inviteError, setInviteError] = useState(null)
+
+  async function handleInvite() {
+    if (!user?.email) return
+    if (!window.confirm(`Envoyer une invitation à ${user.full_name} (${user.email}) ?\n\nLa personne recevra un courriel avec un lien pour choisir son mot de passe.`)) return
+    setInviteState('sending')
+    setInviteError(null)
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    if (error) {
+      setInviteState('error')
+      setInviteError(error.message)
+      return
+    }
+    setInviteState('sent')
+    setTimeout(() => setInviteState('idle'), 8000)
+  }
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
@@ -191,6 +213,24 @@ function MemberCard({ member, editable, onEdit }) {
         >
           Modifier
         </button>
+      ) : null}
+      {isAdmin && user?.email ? (
+        <>
+          <button
+            type="button"
+            onClick={handleInvite}
+            disabled={inviteState === 'sending' || inviteState === 'sent'}
+            className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:border-brand-blue hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {inviteState === 'sending' ? 'Envoi…'
+              : inviteState === 'sent' ? '✓ Invitation envoyée'
+              : inviteState === 'error' ? '⚠ Échec — réessayer'
+              : 'Envoyer l\'invitation'}
+          </button>
+          {inviteError ? (
+            <p className="mt-1 text-[11px] text-red-600">{inviteError}</p>
+          ) : null}
+        </>
       ) : null}
     </div>
   )
