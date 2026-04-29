@@ -8,6 +8,8 @@ import {
   documentFolder,
   DOCUMENT_CATEGORY_OPTIONS,
   DOCUMENT_FOLDER_OPTIONS,
+  validationStatus,
+  VALIDATION_STATUS_OPTIONS,
 } from '../../lib/format'
 import Modal from '../ui/Modal.jsx'
 
@@ -55,6 +57,7 @@ export default function EditDocumentModal({ open, onClose, doc, lots, accessLeve
         version: versionInt,
         lot_id: form.lot_id || null,
         country: form.country,
+        validation_status: form.validation_status,
       })
       .eq('id', doc.id)
 
@@ -176,6 +179,18 @@ export default function EditDocumentModal({ open, onClose, doc, lots, accessLeve
           </select>
         </Field>
 
+        <Field label="Statut">
+          <select
+            value={form.validation_status}
+            onChange={(e) => update('validation_status', e.target.value)}
+            className="block w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          >
+            {VALIDATION_STATUS_OPTIONS.map(s => (
+              <option key={s} value={s}>{validationStatus(s).label}</option>
+            ))}
+          </select>
+        </Field>
+
         {error ? (
           <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
         ) : null}
@@ -214,13 +229,14 @@ export default function EditDocumentModal({ open, onClose, doc, lots, accessLeve
 
 function buildForm(doc) {
   return {
-    title:     doc?.title ?? '',
-    drive_url: doc?.drive_url ?? '',
-    folder:    doc?.folder ?? 'divers',
-    category:  doc?.category ?? 'contract',
-    version:   doc?.version ?? 1,
-    lot_id:    doc?.lot_id ?? '',
-    country:   doc?.country ?? 'CA',
+    title:             doc?.title ?? '',
+    drive_url:         doc?.drive_url ?? '',
+    folder:            doc?.folder ?? 'divers',
+    category:          doc?.category ?? 'contract',
+    version:           doc?.version ?? 1,
+    lot_id:            doc?.lot_id ?? '',
+    country:           doc?.country ?? 'CA',
+    validation_status: doc?.validation_status ?? 'draft',
   }
 }
 

@@ -6,6 +6,8 @@ import {
   COUNTRY_OPTIONS,
   PRODUCER_FOLDER_OPTIONS,
   producerFolder,
+  validationStatus,
+  VALIDATION_STATUS_OPTIONS,
 } from '../../lib/format'
 import Modal from '../ui/Modal.jsx'
 
@@ -52,6 +54,7 @@ export default function EditProducerDocumentModal({ open, onClose, doc, lots, ac
         version_devis: form.folder === 'devis_initiaux' ? (form.version_devis || null) : null,
         lot_id: form.lot_id || null,
         country: form.country,
+        validation_status: form.validation_status,
       })
       .eq('id', doc.id)
 
@@ -173,6 +176,18 @@ export default function EditProducerDocumentModal({ open, onClose, doc, lots, ac
           </Field>
         </div>
 
+        <Field label="Statut">
+          <select
+            value={form.validation_status}
+            onChange={(e) => update('validation_status', e.target.value)}
+            className="block w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          >
+            {VALIDATION_STATUS_OPTIONS.map(s => (
+              <option key={s} value={s}>{validationStatus(s).label}</option>
+            ))}
+          </select>
+        </Field>
+
         {error ? (
           <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
         ) : null}
@@ -211,13 +226,14 @@ export default function EditProducerDocumentModal({ open, onClose, doc, lots, ac
 
 function buildForm(doc) {
   return {
-    title:         doc?.title ?? '',
-    drive_url:     doc?.drive_url ?? '',
-    folder:        doc?.folder ?? 'assurances',
-    version:       doc?.version ?? 1,
-    version_devis: doc?.version_devis ?? '',
-    lot_id:        doc?.lot_id ?? '',
-    country:       doc?.country ?? 'CA',
+    title:             doc?.title ?? '',
+    drive_url:         doc?.drive_url ?? '',
+    folder:            doc?.folder ?? 'assurances',
+    version:           doc?.version ?? 1,
+    version_devis:     doc?.version_devis ?? '',
+    lot_id:            doc?.lot_id ?? '',
+    country:           doc?.country ?? 'CA',
+    validation_status: doc?.validation_status ?? 'draft',
   }
 }
 

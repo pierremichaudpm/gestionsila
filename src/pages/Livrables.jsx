@@ -305,7 +305,12 @@ function DeliverableRow({ deliverable, onStatusChange, onEdit, commentCount, exp
   return (
     <li>
       <div className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
-        <span className="flex-1 font-medium text-slate-900">{deliverable.title}</span>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-slate-900">{deliverable.title}</div>
+          {deliverable.notes ? (
+            <div className="mt-0.5 text-xs italic text-slate-500 whitespace-pre-wrap">{deliverable.notes}</div>
+          ) : null}
+        </div>
         <span className={`text-xs ${overdue ? 'font-semibold text-red-600' : 'text-slate-500'}`}>
           {formatDate(deliverable.due_date)}
           {overdue ? ' (en retard)' : ''}

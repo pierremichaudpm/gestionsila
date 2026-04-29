@@ -148,6 +148,17 @@ export default function StructureFinanciereView({
         {' '}sert uniquement aux conversions affichées si une devise manque.
       </p>
 
+      {fundingSources.length === 0 ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-medium">Aucune source de financement chargée.</p>
+          <p className="mt-1 text-xs">
+            22 sources ont été importées au démarrage. Si cet écran reste vide, faites un
+            rechargement forcé (Ctrl+F5 sur Windows, Cmd+Shift+R sur Mac) pour vider le cache
+            du navigateur. Si le problème persiste, contactez le support technique.
+          </p>
+        </div>
+      ) : null}
+
       {actionError ? (
         <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {actionError}
