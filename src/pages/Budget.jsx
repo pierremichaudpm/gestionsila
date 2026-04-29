@@ -144,7 +144,7 @@ export default function Budget() {
         <div>
           <h1 className="text-2xl font-semibold text-brand-navy">Budget</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Suivi budgétaire par coproducteur. Devises locales conservées ; conversions calculées côté client.
+            Suivi budgétaire par producteur·rice. Devises locales conservées ; conversions calculées côté client.
           </p>
           <Link
             to="/espace-producteurs/devis-initiaux"
@@ -246,7 +246,7 @@ function ViewToggle({ value, onChange, isAdmin }) {
   return (
     <div className="inline-flex rounded-lg border border-slate-300 bg-white p-1 text-xs">
       <ToggleButton active={value === 'byCoproducer'} onClick={() => onChange('byCoproducer')}>
-        Par coproducteur
+        Par producteur·rice
       </ToggleButton>
       {isAdmin ? (
         <ToggleButton active={value === 'consolidated'} onClick={() => onChange('consolidated')}>
@@ -310,7 +310,7 @@ function NoAccessState() {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
       <p className="font-medium text-slate-900">Accès au budget non autorisé.</p>
-      <p className="mt-1">Seuls les producteurs et coproducteurs peuvent consulter le budget.</p>
+      <p className="mt-1">Seuls les producteur·rices peuvent consulter le budget.</p>
     </div>
   )
 }

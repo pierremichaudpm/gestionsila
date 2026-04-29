@@ -306,7 +306,7 @@ function GrandTotalsFooter({ sourcesCad, sourcesEur, budgetCad }) {
           </div>
         </div>
         <div>
-          <div className="text-xs text-slate-500">Budgets coproducteurs (CAD)</div>
+          <div className="text-xs text-slate-500">Budgets producteur·rices (CAD)</div>
           <div className="text-lg font-semibold tabular-nums text-slate-900">{formatOne(budgetCad, 'CAD', { fractionDigits: 2 })}</div>
         </div>
         <div>

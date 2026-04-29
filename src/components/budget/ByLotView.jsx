@@ -29,7 +29,7 @@ export default function ByLotView({
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
         <p className="font-medium text-slate-900">Aucune ligne budgétaire.</p>
-        <p className="mt-1">Ajoutez des lignes via la vue « Par coproducteur ».</p>
+        <p className="mt-1">Ajoutez des lignes via la vue « Par producteur·rice ».</p>
       </div>
     )
   }

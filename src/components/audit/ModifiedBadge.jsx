@@ -40,9 +40,13 @@ export default function ModifiedBadge({ importedValue, modifiedAt, modifiedByNam
 
 function buildTooltip({ entries, modifiedAt, modifiedByName, fieldLabels, skipIdFields }) {
   const header = []
-  header.push(`Modifié${modifiedAt ? ' ' + relativeTime(modifiedAt) : ''}${modifiedByName ? ' par ' + modifiedByName : ''}`)
+  header.push("Cette ligne a été modifiée depuis son import initial.")
   header.push('')
-  header.push("Valeurs d'origine :")
+  if (modifiedAt || modifiedByName) {
+    header.push(`Dernière modif${modifiedAt ? ' ' + relativeTime(modifiedAt) : ''}${modifiedByName ? ' par ' + modifiedByName : ''}.`)
+    header.push('')
+  }
+  header.push("Valeurs d'origine (avant les modifications) :")
 
   const lines = entries.map(([key, value]) => {
     const label = fieldLabels?.[key] ?? key

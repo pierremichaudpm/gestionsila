@@ -38,7 +38,7 @@ const VALIDATION_STATUS = {
 
 const ACCESS_LEVEL = {
   admin:              { label: 'Admin',                  tone: 'ok' },
-  coproducer:         { label: 'Coproducteur',           tone: 'warn' },
+  coproducer:         { label: 'Producteur·rice',        tone: 'warn' },
   production_manager: { label: 'Chargé·e production',    tone: 'warn' },
   contractor:         { label: 'Prestataire',            tone: 'neutral' },
 }
