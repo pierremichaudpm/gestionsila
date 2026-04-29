@@ -82,41 +82,22 @@ cette org (jointure via `project_members.org_id`, `lots.org_id`, ou
 
 ## M3 — `funding_sources.amount_eur/amount_cad` modifiables par coproducer
 
-**Statut** : en discussion avec Virginie.
+**Statut** : ✅ résolu (décision client).
 
-**Description** : `supabase/migrations/010_budget_extensions.sql`. Les
-montants contractuels figés dans le CSV initial peuvent être modifiés par
-un coproducer (sur son pays) ou un admin. Le trigger `track_imported_changes`
-capture la valeur d'origine dans `imported_value` (donc traçable), mais
-rien n'empêche un coproducer FR de PATCH `amount_eur=999999` sur une
-source FR.
+**Décision client 2026-04-29** : montants éditables par coproducer pour
+permettre les corrections de saisie. Risque accepté.
 
-**Question pour Virginie** : ces colonnes doivent-elles être figées sauf
-pour l'admin (qui aurait l'autorité contractuelle), ou le coproducer doit-il
-pouvoir corriger un montant (typo, ré-évaluation contractuelle) ?
+**Description initiale** : `supabase/migrations/010_budget_extensions.sql`.
+Les montants contractuels figés dans le CSV initial peuvent être modifiés
+par un coproducer (sur son pays) ou un admin. Le trigger
+`track_imported_changes` capture la valeur d'origine dans `imported_value`
+(donc traçable), mais rien n'empêche un coproducer FR de PATCH
+`amount_eur=999999` sur une source FR.
 
-**Fix éventuel selon réponse** : si verrouillage admin-only :
-
-```sql
-create or replace function public.protect_funding_source_amounts()
-returns trigger language plpgsql as $$
-begin
-  if exists (select 1 from public.project_members
-              where user_id = auth.uid() and access_level = 'admin'
-                and project_id = NEW.project_id) then
-    return NEW;
-  end if;
-  NEW.amount_eur := OLD.amount_eur;
-  NEW.amount_cad := OLD.amount_cad;
-  return NEW;
-end $$;
-
-create trigger funding_sources_protect_amounts
-  before update on public.funding_sources
-  for each row execute function public.protect_funding_source_amounts();
-```
-
-**Quand traiter** : après réponse Virginie.
+**Mitigation en place** : le picto ✎ ambre (migration 018 + composant
+ModifiedBadge) rend toute modification visible dans la vue Structure
+financière. La valeur d'origine est conservée dans `imported_value` et
+consultable au survol. Tampering détectable a posteriori, donc acceptable.
 
 ---
 
