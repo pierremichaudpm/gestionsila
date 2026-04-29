@@ -75,11 +75,11 @@ export default function LotsBlock({ projectId }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          {lots.map(lot => <LotCard key={lot.id} lot={lot} />)}
           <GlobalCard
             docCount={transversalCounts.docs}
             milestoneCount={transversalCounts.milestones}
           />
+          {lots.map(lot => <LotCard key={lot.id} lot={lot} />)}
         </div>
       )}
     </section>
