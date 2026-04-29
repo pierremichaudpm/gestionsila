@@ -18,7 +18,7 @@ const PRODUCER_NAV_ITEMS = [
   { to: '/espace-producteurs/budget',         label: 'Budget' },
 ]
 
-const DISCORD_URL = '#'
+const DISCORD_URL = 'https://discord.com/channels/1389979512040853578/1468900940601102357'
 
 const linkClass = ({ isActive }) =>
   [
