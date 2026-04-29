@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useCurrentProject } from '../lib/useCurrentProject'
 import { useAuth } from '../lib/AuthProvider.jsx'
@@ -145,6 +146,12 @@ export default function Budget() {
           <p className="mt-1 text-sm text-slate-500">
             Suivi budgétaire par coproducteur. Devises locales conservées ; conversions calculées côté client.
           </p>
+          <Link
+            to="/espace-producteurs/devis-initiaux"
+            className="mt-2 inline-flex items-center gap-1 text-xs text-brand-blue hover:underline"
+          >
+            <span aria-hidden="true">📄</span> Voir les devis initiaux
+          </Link>
         </div>
         <div className="flex flex-col items-end gap-2">
           <ViewToggle value={view} onChange={setView} isAdmin={isAdmin} />

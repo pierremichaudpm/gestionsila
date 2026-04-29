@@ -31,9 +31,11 @@ export default function App() {
           <Route path="/equipe" element={<Equipe />} />
           <Route path="/parametres" element={<Parametres />} />
 
-          <Route path="/espace-producteurs/assurances" element={<ProducerGate><ProducerDocuments /></ProducerGate>} />
-          <Route path="/espace-producteurs/legal"      element={<ProducerGate><ProducerDocuments /></ProducerGate>} />
-          <Route path="/espace-producteurs/budget"     element={<ProducerGate><Budget /></ProducerGate>} />
+          {/* Budget en route statique pour précéder la route :folder
+              dynamique. React Router 7 priorise le statique mais on est
+              explicite ici. */}
+          <Route path="/espace-producteurs/budget" element={<ProducerGate><Budget /></ProducerGate>} />
+          <Route path="/espace-producteurs/:folder" element={<ProducerGate><ProducerDocuments /></ProducerGate>} />
 
           {/* Ancienne route /budget : redirige vers Espace Producteurs si accès,
               sinon vers le tableau de contrôle. */}

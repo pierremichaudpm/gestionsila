@@ -12,9 +12,10 @@ const NAV_ITEMS = [
 ]
 
 const PRODUCER_NAV_ITEMS = [
-  { to: '/espace-producteurs/assurances', label: 'Assurances' },
-  { to: '/espace-producteurs/legal',      label: 'Légal' },
-  { to: '/espace-producteurs/budget',     label: 'Budget' },
+  { to: '/espace-producteurs/assurances',     label: 'Assurances' },
+  { to: '/espace-producteurs/legal',          label: 'Légal' },
+  { to: '/espace-producteurs/devis-initiaux', label: 'Devis initiaux' },
+  { to: '/espace-producteurs/budget',         label: 'Budget' },
 ]
 
 const DISCORD_URL = '#'

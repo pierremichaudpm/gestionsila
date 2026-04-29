@@ -64,6 +64,7 @@ export default function NewProducerDocumentModal({
       title: form.title,
       country: userCountry,
       version,
+      version_devis: form.folder === 'devis_initiaux' ? (form.version_devis || null) : null,
       validation_status: 'draft',
       drive_url: form.drive_url,
     })
@@ -112,6 +113,18 @@ export default function NewProducerDocumentModal({
             ))}
           </select>
         </Field>
+
+        {form.folder === 'devis_initiaux' ? (
+          <Field label="Version du devis">
+            <input
+              type="text"
+              value={form.version_devis}
+              onChange={(e) => update('version_devis', e.target.value)}
+              placeholder="ex. v1 — dépôt SODEC mars 2026"
+              className="block w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+            />
+          </Field>
+        ) : null}
 
         <Field label="Tableau">
           <select
@@ -162,6 +175,7 @@ function buildInitial(defaultFolder) {
     drive_url: '',
     folder: defaultFolder ?? PRODUCER_FOLDER_OPTIONS[0],
     lot_id: '',
+    version_devis: '',
   }
 }
 

@@ -9,6 +9,7 @@ import {
   COUNTRY_OPTIONS,
   PRODUCER_FOLDER_OPTIONS,
   producerFolder,
+  producerUrlToFolder,
   relativeTime,
   toneClass,
   validationStatus,
@@ -28,7 +29,9 @@ export default function ProducerDocuments() {
   const params = useParams()
   const { projectId, accessLevel, hasProducerAccess, loading: projectLoading } = useCurrentProject()
   const { profile } = useAuth()
-  const folder = params.folder
+  // L'URL utilise des tirets pour devis-initiaux, la DB des underscores.
+  // producerUrlToFolder() convertit ; renvoie null si l'URL est invalide.
+  const folder = producerUrlToFolder(params.folder)
 
   const [docs, setDocs] = useState([])
   const [lots, setLots] = useState([])
@@ -42,7 +45,7 @@ export default function ProducerDocuments() {
   const [expandedId, setExpandedId] = useState(null)
   const [commentBump, setCommentBump] = useState(0)
 
-  const folderValid = VALID_FOLDERS.has(folder)
+  const folderValid = folder !== null && VALID_FOLDERS.has(folder)
 
   useEffect(() => {
     if (!projectId || !folderValid) return
@@ -54,7 +57,7 @@ export default function ProducerDocuments() {
       const [docsRes, lotsRes] = await Promise.all([
         supabase
           .from('producer_documents')
-          .select('id, title, folder, country, version, validation_status, drive_url, lot_id, uploaded_by, updated_at, imported_value, last_modified_at, lot:lots(id, name), last_modified_by_user:users!producer_documents_last_modified_by_fkey(full_name)')
+          .select('id, title, folder, country, version, version_devis, validation_status, drive_url, lot_id, uploaded_by, updated_at, imported_value, last_modified_at, lot:lots(id, name), last_modified_by_user:users!producer_documents_last_modified_by_fkey(full_name)')
           .eq('project_id', projectId)
           .eq('folder', folder)
           .order('updated_at', { ascending: false }),
@@ -168,6 +171,7 @@ export default function ProducerDocuments() {
                 <th className="px-3 py-2">Tableau</th>
                 <th className="px-3 py-2">Pays</th>
                 <th className="px-3 py-2">Version</th>
+                {folder === 'devis_initiaux' ? <th className="px-3 py-2">Version devis</th> : null}
                 <th className="px-3 py-2">Statut</th>
                 <th className="px-3 py-2">Modifié</th>
                 <th className="px-3 py-2"></th>
@@ -179,6 +183,7 @@ export default function ProducerDocuments() {
                 <ProducerDocumentRow
                   key={doc.id}
                   doc={doc}
+                  folder={folder}
                   profile={profile}
                   accessLevel={accessLevel}
                   onAction={handleAction}
@@ -261,7 +266,7 @@ function FilterSelect({ label, value, onChange, children }) {
   )
 }
 
-function ProducerDocumentRow({ doc, profile, accessLevel, onAction, onEdit, commentCount, expanded, onToggle, projectId, onCommentChange }) {
+function ProducerDocumentRow({ doc, folder, profile, accessLevel, onAction, onEdit, commentCount, expanded, onToggle, projectId, onCommentChange }) {
   const v = validationStatus(doc.validation_status)
   const isMyCountry = profile?.country === doc.country
   const isAdmin = accessLevel === 'admin'
@@ -298,6 +303,11 @@ function ProducerDocumentRow({ doc, profile, accessLevel, onAction, onEdit, comm
           <span title={countryName(doc.country)}>{countryFlag(doc.country)}</span>
         </td>
         <td className="px-3 py-2 text-slate-600">v{doc.version}</td>
+        {folder === 'devis_initiaux' ? (
+          <td className="px-3 py-2 text-xs text-slate-600">
+            {doc.version_devis ?? <span className="italic text-slate-400">—</span>}
+          </td>
+        ) : null}
         <td className="px-3 py-2">
           <span className={`inline-flex rounded px-2 py-0.5 text-[11px] font-medium ${toneClass(v.tone)}`}>
             {v.label}
@@ -346,7 +356,7 @@ function ProducerDocumentRow({ doc, profile, accessLevel, onAction, onEdit, comm
       </tr>
       {expanded ? (
         <tr className="bg-slate-50/60">
-          <td colSpan={8} className="px-5 py-4">
+          <td colSpan={folder === 'devis_initiaux' ? 9 : 8} className="px-5 py-4">
             <CommentThread
               projectId={projectId}
               entityType="producer_document"

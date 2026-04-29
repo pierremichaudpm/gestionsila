@@ -48,6 +48,7 @@ export const PRODUCER_DOCUMENT_LABELS = {
   drive_url:         'URL Drive',
   folder:            'Sous-dossier',
   version:           'Version',
+  version_devis:     'Version du devis',
   lot_id:            'Tableau',
   country:           'Pays',
   validation_status: 'Statut',

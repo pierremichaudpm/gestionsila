@@ -85,9 +85,22 @@ const DOCUMENT_FOLDER = {
 }
 
 const PRODUCER_FOLDER = {
-  assurances: { label: 'Assurances', description: 'Polices, attestations, sinistres' },
-  legal:      { label: 'Légal',      description: 'Contrats de production, conventions, juridique' },
+  assurances:     { label: 'Assurances',     description: 'Polices, attestations, sinistres' },
+  legal:          { label: 'Légal',          description: 'Contrats de production, conventions, juridique' },
+  devis_initiaux: { label: 'Devis initiaux', description: "Trace figée des devis Excel originaux déposés aux bailleurs. Sert de référence historique pour les rapports et audits, indépendamment de l'évolution du module Budget interactif" },
 }
+
+// Mapping URL ↔ DB pour devis_initiaux (URL avec tiret, DB avec underscore).
+// Les autres dossiers ont une forme identique. Utilisé par ProducerDocuments,
+// Sidebar et le lien depuis Budget.
+const PRODUCER_FOLDER_TO_URL = {
+  assurances:     'assurances',
+  legal:          'legal',
+  devis_initiaux: 'devis-initiaux',
+}
+const PRODUCER_URL_TO_FOLDER = Object.fromEntries(
+  Object.entries(PRODUCER_FOLDER_TO_URL).map(([folder, url]) => [url, folder])
+)
 
 // Mapping category -> folder par défaut. Sert au pré-remplissage de la modal
 // "+ Nouveau document" et reste cohérent avec le commentaire de la migration 008.
@@ -148,6 +161,14 @@ export function documentFolder(f) {
 
 export function producerFolder(f) {
   return PRODUCER_FOLDER[f] ?? { label: f, description: '' }
+}
+
+export function producerFolderToUrl(folder) {
+  return PRODUCER_FOLDER_TO_URL[folder] ?? folder
+}
+
+export function producerUrlToFolder(urlSegment) {
+  return PRODUCER_URL_TO_FOLDER[urlSegment] ?? null
 }
 
 export function folderForCategory(category) {
