@@ -14,9 +14,11 @@ function initials(name) {
 export default function CommentThread({ projectId, entityType, entityId, onCountChange }) {
   const { profile } = useAuth()
   const [comments, setComments] = useState([])
+  const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [draft, setDraft] = useState('')
+  const [addressedTo, setAddressedTo] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [actionError, setActionError] = useState(null)
 
@@ -27,23 +29,37 @@ export default function CommentThread({ projectId, entityType, entityId, onCount
     async function load() {
       setLoading(true)
       setError(null)
-      const { data, error } = await supabase
-        .from('comments')
-        .select('id, content, created_at, user_id, author:users(id, full_name, organization:organizations(name))')
-        .eq('project_id', projectId)
-        .eq('entity_type', entityType)
-        .eq('entity_id', entityId)
-        .order('created_at', { ascending: true })
+      // Comments fetch — disambiguer les 2 FK vers users (auteur + adressé)
+      // via les noms FK explicites.
+      const [commentsRes, membersRes] = await Promise.all([
+        supabase
+          .from('comments')
+          .select('id, content, created_at, user_id, addressed_to, author:users!comments_user_id_fkey(id, full_name, organization:organizations(name)), addressed:users!comments_addressed_to_fkey(id, full_name)')
+          .eq('project_id', projectId)
+          .eq('entity_type', entityType)
+          .eq('entity_id', entityId)
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('project_members')
+          .select('user:users(id, full_name)')
+          .eq('project_id', projectId),
+      ])
 
       if (!alive) return
-      if (error) {
-        setError(error)
+      if (commentsRes.error) {
+        setError(commentsRes.error)
         setLoading(false)
         return
       }
-      setComments(data ?? [])
+      setComments(commentsRes.data ?? [])
+      // Trier les membres par prénom pour le dropdown
+      const memberList = (membersRes.data ?? [])
+        .map(m => m.user)
+        .filter(Boolean)
+        .sort((a, b) => (a.full_name ?? '').localeCompare(b.full_name ?? ''))
+      setMembers(memberList)
       setLoading(false)
-      onCountChange?.((data ?? []).length)
+      onCountChange?.((commentsRes.data ?? []).length)
     }
 
     load()
@@ -63,9 +79,10 @@ export default function CommentThread({ projectId, entityType, entityId, onCount
         entity_type: entityType,
         entity_id: entityId,
         user_id: profile.id,
+        addressed_to: addressedTo || null,
         content,
       })
-      .select('id, content, created_at, user_id, author:users(id, full_name, organization:organizations(name))')
+      .select('id, content, created_at, user_id, addressed_to, author:users!comments_user_id_fkey(id, full_name, organization:organizations(name)), addressed:users!comments_addressed_to_fkey(id, full_name)')
       .single()
 
     setSubmitting(false)
@@ -76,6 +93,7 @@ export default function CommentThread({ projectId, entityType, entityId, onCount
     const next = [...comments, data]
     setComments(next)
     setDraft('')
+    setAddressedTo('')
     onCountChange?.(next.length)
   }
 
@@ -128,22 +146,40 @@ export default function CommentThread({ projectId, entityType, entityId, onCount
         </p>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Écrire un commentaire…"
-          rows={2}
-          disabled={submitting || !profile}
-          className="flex-1 resize-y rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue disabled:opacity-60"
-        />
-        <button
-          type="submit"
-          disabled={submitting || !draft.trim() || !profile}
-          className="self-start rounded-lg bg-[color:var(--color-brand-navy)] px-3 py-2 text-xs font-medium text-white transition hover:bg-[color:var(--color-brand-blue)] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {submitting ? '…' : 'Commenter'}
-        </button>
+      <form onSubmit={handleSubmit} className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-slate-500">
+            <span>Adresser à</span>
+            <select
+              value={addressedTo}
+              onChange={(e) => setAddressedTo(e.target.value)}
+              disabled={submitting || !profile}
+              className="rounded border border-slate-300 bg-white px-2 py-1 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue disabled:opacity-60"
+            >
+              <option value="">— personne —</option>
+              {members.map(m => (
+                <option key={m.id} value={m.id}>{m.full_name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="flex gap-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Écrire un commentaire…"
+            rows={2}
+            disabled={submitting || !profile}
+            className="flex-1 resize-y rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={submitting || !draft.trim() || !profile}
+            className="self-start rounded-lg bg-[color:var(--color-brand-navy)] px-3 py-2 text-xs font-medium text-white transition hover:bg-[color:var(--color-brand-blue)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {submitting ? '…' : 'Commenter'}
+          </button>
+        </div>
       </form>
     </div>
   )
@@ -152,6 +188,7 @@ export default function CommentThread({ projectId, entityType, entityId, onCount
 function CommentItem({ comment, isAuthor, onDelete }) {
   const author = comment.author
   const orgName = author?.organization?.name
+  const addressed = comment.addressed
   return (
     <li className="flex gap-3 rounded border border-slate-200 bg-white px-3 py-2 text-sm">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-brand-navy)] text-[11px] font-semibold text-white">
@@ -164,6 +201,11 @@ function CommentItem({ comment, isAuthor, onDelete }) {
           </span>
           {orgName ? (
             <span className="text-xs text-slate-500">{orgName}</span>
+          ) : null}
+          {addressed?.full_name ? (
+            <span className="inline-flex items-center gap-1 rounded bg-brand-blue/10 px-2 py-0.5 text-[11px] font-medium text-brand-blue">
+              → {addressed.full_name}
+            </span>
           ) : null}
           <span className="text-xs text-slate-400">{relativeTime(comment.created_at)}</span>
           {isAuthor ? (

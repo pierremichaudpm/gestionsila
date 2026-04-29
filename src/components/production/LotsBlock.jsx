@@ -5,6 +5,7 @@ import { countryFlag, countryName, lotStatus, toneClass } from '../../lib/format
 
 export default function LotsBlock({ projectId }) {
   const [lots, setLots] = useState([])
+  const [transversalCounts, setTransversalCounts] = useState({ docs: 0, milestones: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -16,20 +17,36 @@ export default function LotsBlock({ projectId }) {
       setLoading(true)
       setError(null)
 
-      const { data, error } = await supabase
-        .from('lots')
-        .select('id, name, director, country, status, sort_order, documents(count), milestones(count)')
-        .eq('project_id', projectId)
-        .order('sort_order', { ascending: true })
+      const [lotsRes, docsRes, msRes] = await Promise.all([
+        supabase
+          .from('lots')
+          .select('id, name, director, country, status, sort_order, documents(count), milestones(count)')
+          .eq('project_id', projectId)
+          .order('sort_order', { ascending: true }),
+        supabase
+          .from('documents')
+          .select('id', { count: 'exact', head: true })
+          .eq('project_id', projectId)
+          .is('lot_id', null),
+        supabase
+          .from('milestones')
+          .select('id', { count: 'exact', head: true })
+          .eq('project_id', projectId)
+          .is('lot_id', null),
+      ])
 
       if (!alive) return
 
-      if (error) {
-        setError(error)
+      if (lotsRes.error) {
+        setError(lotsRes.error)
         setLoading(false)
         return
       }
-      setLots(data ?? [])
+      setLots(lotsRes.data ?? [])
+      setTransversalCounts({
+        docs: docsRes.count ?? 0,
+        milestones: msRes.count ?? 0,
+      })
       setLoading(false)
     }
 
@@ -42,7 +59,7 @@ export default function LotsBlock({ projectId }) {
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Tableaux</h2>
         {!loading && !error ? (
-          <span className="text-xs text-slate-400">{lots.length}</span>
+          <span className="text-xs text-slate-400">{lots.length} + global</span>
         ) : null}
       </div>
       {loading ? (
@@ -57,8 +74,12 @@ export default function LotsBlock({ projectId }) {
           Aucun tableau pour l'instant.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
           {lots.map(lot => <LotCard key={lot.id} lot={lot} />)}
+          <GlobalCard
+            docCount={transversalCounts.docs}
+            milestoneCount={transversalCounts.milestones}
+          />
         </div>
       )}
     </section>
@@ -101,10 +122,44 @@ function LotCard({ lot }) {
   )
 }
 
+// Card "Global" : agrège les documents et jalons sans tableau (lot_id NULL).
+// Lien vers /documents (la grille des sous-dossiers documentaires) — c'est
+// la destination la plus naturelle pour parcourir les pièces transversales.
+function GlobalCard({ docCount, milestoneCount }) {
+  return (
+    <Link
+      to="/documents"
+      className="group flex h-full flex-col rounded-lg border-2 border-dashed border-slate-200 bg-slate-50/50 p-4 shadow-sm transition hover:border-brand-blue hover:bg-white hover:shadow"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span
+          title="Transversal — pièces sans tableau spécifique"
+          aria-label="Transversal"
+          className="text-lg leading-none"
+        >
+          🌐
+        </span>
+        <span className="inline-flex rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+          Transversal
+        </span>
+      </div>
+      <h3 className="mt-3 text-sm font-semibold text-slate-900 group-hover:text-brand-navy">
+        Global
+      </h3>
+      <p className="mt-1 text-xs text-slate-500">
+        Documents et jalons sans tableau spécifique
+      </p>
+      <div className="mt-auto pt-3 text-xs text-slate-500">
+        {docCount} {docCount > 1 ? 'docs' : 'doc'} · {milestoneCount} {milestoneCount > 1 ? 'jalons' : 'jalon'}
+      </div>
+    </Link>
+  )
+}
+
 function LotsSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-      {[0, 1, 2, 3, 4].map(i => (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+      {[0, 1, 2, 3, 4, 5].map(i => (
         <div
           key={i}
           className="h-32 animate-pulse rounded-lg border border-slate-200 bg-white"
