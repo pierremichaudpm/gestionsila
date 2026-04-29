@@ -15,6 +15,8 @@ import {
 import NewMilestoneModal from '../components/calendrier/NewMilestoneModal.jsx'
 import EditMilestoneModal from '../components/calendrier/EditMilestoneModal.jsx'
 import MilestoneDetailModal from '../components/calendrier/MilestoneDetailModal.jsx'
+import GanttView from '../components/calendrier/GanttView.jsx'
+import EditDeliverableModal from '../components/livrables/EditDeliverableModal.jsx'
 import CommentBadge from '../components/comments/CommentBadge.jsx'
 import ModifiedBadge from '../components/audit/ModifiedBadge.jsx'
 import { useCommentCounts } from '../components/comments/useCommentCounts.js'
@@ -25,6 +27,7 @@ export default function Calendrier() {
   const { profile } = useAuth()
   const [milestones, setMilestones] = useState([])
   const [deliverables, setDeliverables] = useState([])
+  const [funders, setFunders] = useState([])
   const [lots, setLots] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -33,7 +36,9 @@ export default function Calendrier() {
   const [reloadKey, setReloadKey] = useState(0)
   const [detailMilestone, setDetailMilestone] = useState(null)
   const [editMilestone, setEditMilestone] = useState(null)
+  const [editDeliverable, setEditDeliverable] = useState(null)
   const [commentBump, setCommentBump] = useState(0)
+  const [showGantt, setShowGantt] = useState(true)
 
   const canCreate = accessLevel === 'admin' || accessLevel === 'coproducer'
 
@@ -44,15 +49,15 @@ export default function Calendrier() {
     async function load() {
       setLoading(true)
       setError(null)
-      const [msRes, delRes, lotsRes] = await Promise.all([
+      const [msRes, delRes, lotsRes, fundersRes] = await Promise.all([
         supabase
           .from('milestones')
-          .select('id, lot_id, title, start_date, end_date, type, country, notes, imported_value, last_modified_at, last_modified_by_user:users!milestones_last_modified_by_fkey(full_name)')
+          .select('id, project_id, lot_id, funder_id, title, start_date, end_date, type, country, notes, imported_value, last_modified_at, last_modified_by_user:users!milestones_last_modified_by_fkey(full_name)')
           .eq('project_id', projectId)
           .order('start_date', { ascending: true }),
         supabase
           .from('deliverables')
-          .select('id, title, due_date, status, funder:funders!inner(id, name, country, project_id)')
+          .select('id, funder_id, title, due_date, status, notes, funder:funders!inner(id, name, country, project_id)')
           .eq('funder.project_id', projectId)
           .not('due_date', 'is', null)
           .order('due_date', { ascending: true }),
@@ -61,10 +66,15 @@ export default function Calendrier() {
           .select('id, name, country')
           .eq('project_id', projectId)
           .order('sort_order', { ascending: true }),
+        supabase
+          .from('funders')
+          .select('id, name, country')
+          .eq('project_id', projectId)
+          .order('name', { ascending: true }),
       ])
 
       if (!alive) return
-      const firstError = msRes.error ?? delRes.error ?? lotsRes.error
+      const firstError = msRes.error ?? delRes.error ?? lotsRes.error ?? fundersRes.error
       if (firstError) {
         setError(firstError)
         setLoading(false)
@@ -73,6 +83,7 @@ export default function Calendrier() {
       setMilestones(msRes.data ?? [])
       setDeliverables(delRes.data ?? [])
       setLots(lotsRes.data ?? [])
+      setFunders(fundersRes.data ?? [])
       setLoading(false)
     }
 
@@ -91,6 +102,7 @@ export default function Calendrier() {
       type: m.type,
       country: m.country,
       lotId: m.lot_id ?? null,
+      funderId: m.funder_id ?? null,
       context: m.lot_id ? lotsById[m.lot_id]?.name ?? '—' : null,
       notes: m.notes,
       importedValue: m.imported_value,
@@ -106,8 +118,9 @@ export default function Calendrier() {
       type: 'depot_fonds',
       country: d.funder?.country ?? null,
       lotId: null,
+      funderId: d.funder?.id ?? null,
       context: d.funder?.name ?? null,
-      notes: null,
+      notes: d.notes ?? null,
       status: d.status,
     }))
     return [...fromMilestones, ...fromDeliverables].sort((a, b) =>
@@ -198,6 +211,40 @@ export default function Calendrier() {
         </div>
       )}
 
+      {!loading && !error && filtered.length > 0 ? (
+        <section className="border-t border-slate-200 pt-6">
+          <div className="hidden md:block space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowGantt(s => !s)}
+              className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-brand-navy shadow-sm transition hover:border-brand-blue"
+            >
+              <span>Vue Gantt — Calendrier global</span>
+              <span className="text-xs font-medium text-slate-500">
+                {showGantt ? 'Masquer ▾' : 'Afficher ▸'}
+              </span>
+            </button>
+            {showGantt ? (
+              <GanttView
+                items={filtered}
+                funders={funders}
+                onMilestoneClick={(milestoneId) => {
+                  const m = milestones.find(x => x.id === milestoneId)
+                  if (m) setDetailMilestone(m)
+                }}
+                onDeliverableClick={(deliverableId) => {
+                  const d = deliverables.find(x => x.id === deliverableId)
+                  if (d) setEditDeliverable(d)
+                }}
+              />
+            ) : null}
+          </div>
+          <div className="block md:hidden rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-500">
+            La vue Gantt est disponible sur écran large (≥ 768 px).
+          </div>
+        </section>
+      ) : null}
+
       <NewMilestoneModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -230,9 +277,20 @@ export default function Calendrier() {
         milestone={editMilestone}
         lots={lots}
         accessLevel={accessLevel}
+        projectId={projectId}
         onClose={() => setEditMilestone(null)}
         onSaved={() => { setEditMilestone(null); setReloadKey(k => k + 1) }}
         onDeleted={() => { setEditMilestone(null); setReloadKey(k => k + 1) }}
+      />
+
+      <EditDeliverableModal
+        open={!!editDeliverable}
+        deliverable={editDeliverable}
+        funders={funders}
+        accessLevel={accessLevel}
+        onClose={() => setEditDeliverable(null)}
+        onSaved={() => { setEditDeliverable(null); setReloadKey(k => k + 1) }}
+        onDeleted={() => { setEditDeliverable(null); setReloadKey(k => k + 1) }}
       />
     </div>
   )

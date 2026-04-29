@@ -13,9 +13,10 @@ import Modal from '../ui/Modal.jsx'
 // pré-remplis depuis le record. Permission RLS : admin partout, coproducer
 // limité à son pays (si l'utilisateur tente de modifier le country, le check
 // RLS rejette).
-export default function EditMilestoneModal({ open, onClose, milestone, lots, accessLevel, onSaved, onDeleted }) {
+export default function EditMilestoneModal({ open, onClose, milestone, lots, accessLevel, projectId, onSaved, onDeleted }) {
   const isAdmin = accessLevel === 'admin'
   const [form, setForm] = useState(buildForm(milestone))
+  const [funders, setFunders] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
@@ -25,6 +26,18 @@ export default function EditMilestoneModal({ open, onClose, milestone, lots, acc
       setError(null)
     }
   }, [open, milestone])
+
+  useEffect(() => {
+    if (!open || !projectId) return
+    let alive = true
+    supabase
+      .from('funders')
+      .select('id, name, country')
+      .eq('project_id', projectId)
+      .order('name', { ascending: true })
+      .then(({ data }) => { if (alive) setFunders(data ?? []) })
+    return () => { alive = false }
+  }, [open, projectId])
 
   function update(key, value) {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -54,6 +67,7 @@ export default function EditMilestoneModal({ open, onClose, milestone, lots, acc
         type: form.type,
         country: form.country,
         lot_id: form.lot_id || null,
+        funder_id: form.funder_id || null,
         notes: form.notes || null,
       })
       .eq('id', milestone.id)
@@ -163,6 +177,21 @@ export default function EditMilestoneModal({ open, onClose, milestone, lots, acc
           </select>
         </Field>
 
+        <Field label="Bailleur (optionnel)">
+          <select
+            value={form.funder_id}
+            onChange={(e) => update('funder_id', e.target.value)}
+            className="block w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          >
+            <option value="">Aucun (production interne)</option>
+            {funders.map(f => (
+              <option key={f.id} value={f.id}>
+                {countryFlag(f.country)} {f.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
         <Field label="Notes">
           <textarea
             rows={3}
@@ -216,6 +245,7 @@ function buildForm(milestone) {
     type:       milestone?.type ?? 'jalon_production',
     country:    milestone?.country ?? 'CA',
     lot_id:     milestone?.lot_id ?? '',
+    funder_id:  milestone?.funder_id ?? '',
     notes:      milestone?.notes ?? '',
   }
 }

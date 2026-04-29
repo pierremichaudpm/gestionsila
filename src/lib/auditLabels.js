@@ -10,6 +10,7 @@ export const MILESTONE_LABELS = {
   country:    'Pays',
   lot_id:     'Tableau',
   notes:      'Notes',
+  funder_id:  'Bailleur',
 }
 
 export const BUDGET_LINE_LABELS = {

@@ -18,9 +18,11 @@ export default function NewMilestoneModal({ open, onClose, projectId, lots, prof
     type: 'jalon_production',
     country: profile?.country ?? 'CA',
     lot_id: '',
+    funder_id: '',
     notes: '',
   }
   const [form, setForm] = useState(initial)
+  const [funders, setFunders] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
@@ -31,6 +33,18 @@ export default function NewMilestoneModal({ open, onClose, projectId, lots, prof
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  useEffect(() => {
+    if (!open || !projectId) return
+    let alive = true
+    supabase
+      .from('funders')
+      .select('id, name, country')
+      .eq('project_id', projectId)
+      .order('name', { ascending: true })
+      .then(({ data }) => { if (alive) setFunders(data ?? []) })
+    return () => { alive = false }
+  }, [open, projectId])
 
   function update(key, value) {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -57,6 +71,7 @@ export default function NewMilestoneModal({ open, onClose, projectId, lots, prof
     const { error: insertError } = await supabase.from('milestones').insert({
       project_id: projectId,
       lot_id: form.lot_id || null,
+      funder_id: form.funder_id || null,
       title: form.title,
       start_date: start,
       end_date: end,
@@ -152,6 +167,21 @@ export default function NewMilestoneModal({ open, onClose, projectId, lots, prof
           >
             <option value="">Aucun (transversal)</option>
             {lots.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </Field>
+
+        <Field label="Bailleur (optionnel)">
+          <select
+            value={form.funder_id}
+            onChange={(e) => update('funder_id', e.target.value)}
+            className="block w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          >
+            <option value="">Aucun (production interne)</option>
+            {funders.map(f => (
+              <option key={f.id} value={f.id}>
+                {countryFlag(f.country)} {f.name}
+              </option>
+            ))}
           </select>
         </Field>
 
