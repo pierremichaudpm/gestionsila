@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { countryFlag, milestoneType } from '../../lib/format'
 import { getFunderColor, INTERNAL_LABEL } from './ganttColors'
+import ArchiveCheckbox from './ArchiveCheckbox.jsx'
 
 // Vue Gantt complémentaire de la timeline verticale du Calendrier.
 // Lecture seule : pas de drag, pas d'édition. Clic sur un item ouvre la modal
@@ -23,6 +24,7 @@ export default function GanttView({
   funders,
   onMilestoneClick,
   onDeliverableClick,
+  onToggleArchive,
 }) {
   const [funderFilter, setFunderFilter] = useState('all')
 
@@ -180,6 +182,7 @@ export default function GanttView({
                 scaleWidth={scaleWidth}
                 onMilestoneClick={onMilestoneClick}
                 onDeliverableClick={onDeliverableClick}
+                onToggleArchive={onToggleArchive}
               />
             ))}
             {todayX !== null ? (
@@ -221,7 +224,7 @@ export default function GanttView({
 }
 
 // ─── Swimlane ───────────────────────────────────────────────────────
-function Swimlane({ lane, rangeStart, scaleWidth, onMilestoneClick, onDeliverableClick }) {
+function Swimlane({ lane, rangeStart, scaleWidth, onMilestoneClick, onDeliverableClick, onToggleArchive }) {
   return (
     <div className="border-b border-slate-200 last:border-b-0">
       {/* Header swimlane */}
@@ -257,6 +260,7 @@ function Swimlane({ lane, rangeStart, scaleWidth, onMilestoneClick, onDeliverabl
           scaleWidth={scaleWidth}
           onMilestoneClick={onMilestoneClick}
           onDeliverableClick={onDeliverableClick}
+          onToggleArchive={onToggleArchive}
         />
       ))}
     </div>
@@ -264,7 +268,9 @@ function Swimlane({ lane, rangeStart, scaleWidth, onMilestoneClick, onDeliverabl
 }
 
 // ─── Ligne d'item (barre ou losange) ────────────────────────────────
-function ItemRow({ item, color, rangeStart, scaleWidth, onMilestoneClick, onDeliverableClick }) {
+function ItemRow({ item, color, rangeStart, scaleWidth, onMilestoneClick, onDeliverableClick, onToggleArchive }) {
+  const isMilestone = item.source === 'milestone'
+  const milestoneId = isMilestone ? item.id.replace(/^milestone-/, '') : null
   const isPunctual = !item.endDate || item.startDate === item.endDate
   const start = parseDate(item.startDate)
   const end = item.endDate ? parseDate(item.endDate) : start
@@ -292,10 +298,16 @@ function ItemRow({ item, color, rangeStart, scaleWidth, onMilestoneClick, onDeli
   return (
     <div className="flex items-stretch border-b border-slate-100 last:border-b-0" style={{ height: ROW_H }}>
       <div
-        className="flex shrink-0 items-center border-r border-slate-200 pl-9 pr-4 text-[13px] text-slate-800"
+        className="flex shrink-0 items-center gap-2 border-r border-slate-200 pl-9 pr-3 text-[13px] text-slate-800"
         style={{ width: LABEL_W }}
       >
-        <span className="truncate">{item.title}</span>
+        <span className="flex-1 truncate">{item.title}</span>
+        {isMilestone && onToggleArchive ? (
+          <ArchiveCheckbox
+            checked={item.archived}
+            onChange={(next) => onToggleArchive(milestoneId, next)}
+          />
+        ) : null}
       </div>
       <div className="relative" style={{ width: scaleWidth }}>
         {isPunctual ? (

@@ -16,6 +16,7 @@ import NewMilestoneModal from '../components/calendrier/NewMilestoneModal.jsx'
 import EditMilestoneModal from '../components/calendrier/EditMilestoneModal.jsx'
 import MilestoneDetailModal from '../components/calendrier/MilestoneDetailModal.jsx'
 import GanttView from '../components/calendrier/GanttView.jsx'
+import ArchiveCheckbox from '../components/calendrier/ArchiveCheckbox.jsx'
 import EditDeliverableModal from '../components/livrables/EditDeliverableModal.jsx'
 import CommentBadge from '../components/comments/CommentBadge.jsx'
 import ModifiedBadge from '../components/audit/ModifiedBadge.jsx'
@@ -52,7 +53,7 @@ export default function Calendrier() {
       const [msRes, delRes, lotsRes, fundersRes] = await Promise.all([
         supabase
           .from('milestones')
-          .select('id, project_id, lot_id, funder_id, title, start_date, end_date, type, country, notes, imported_value, last_modified_at, last_modified_by_user:users!milestones_last_modified_by_fkey(full_name)')
+          .select('id, project_id, lot_id, funder_id, title, start_date, end_date, type, country, notes, archived, archived_at, imported_value, last_modified_at, last_modified_by_user:users!milestones_last_modified_by_fkey(full_name)')
           .eq('project_id', projectId)
           .order('start_date', { ascending: true }),
         supabase
@@ -105,6 +106,8 @@ export default function Calendrier() {
       funderId: m.funder_id ?? null,
       context: m.lot_id ? lotsById[m.lot_id]?.name ?? '—' : null,
       notes: m.notes,
+      archived: m.archived === true,
+      archivedAt: m.archived_at,
       importedValue: m.imported_value,
       modifiedAt: m.last_modified_at,
       modifiedByName: m.last_modified_by_user?.full_name ?? null,
@@ -122,6 +125,7 @@ export default function Calendrier() {
       context: d.funder?.name ?? null,
       notes: d.notes ?? null,
       status: d.status,
+      archived: false,
     }))
     return [...fromMilestones, ...fromDeliverables].sort((a, b) =>
       a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0
@@ -140,15 +144,39 @@ export default function Calendrier() {
     })
   }, [items, filters])
 
+  // Split actif vs archivé. Le Gantt et la timeline mois ne montrent que
+  // les items actifs. La section Archive en bas regroupe les jalons archivés.
+  // Les deliverables n'ont pas de flag archive (le statut "validé" en fait
+  // office côté Livrables, mais ils restent visibles dans le Calendrier).
+  const activeItems = useMemo(() => filtered.filter(i => !i.archived), [filtered])
+  const archivedItems = useMemo(() => filtered.filter(i => i.archived), [filtered])
+
   const grouped = useMemo(() => {
     const byMonth = new Map()
-    for (const item of filtered) {
+    for (const item of activeItems) {
       const key = item.startDate.slice(0, 7)
       if (!byMonth.has(key)) byMonth.set(key, [])
       byMonth.get(key).push(item)
     }
     return Array.from(byMonth.entries())
-  }, [filtered])
+  }, [activeItems])
+
+  // État local des mois repliés (par défaut tous ouverts).
+  const [collapsedMonths, setCollapsedMonths] = useState(() => new Set())
+  function toggleMonth(monthKey) {
+    setCollapsedMonths(prev => {
+      const next = new Set(prev)
+      if (next.has(monthKey)) next.delete(monthKey); else next.add(monthKey)
+      return next
+    })
+  }
+
+  // Toggle global Archive (replié par défaut).
+  const [archiveOpen, setArchiveOpen] = useState(false)
+
+  // Toggle d'affichage Gantt + Timeline (les deux peuvent être masqués).
+  const [showTimeline, setShowTimeline] = useState(true)
+  const [archiveError, setArchiveError] = useState(null)
 
   const milestoneIds = useMemo(
     () => filtered.filter(i => i.source === 'milestone').map(i => i.id.replace(/^milestone-/, '')),
@@ -158,6 +186,21 @@ export default function Calendrier() {
 
   function updateFilter(key, value) {
     setFilters(prev => ({ ...prev, [key]: value }))
+  }
+
+  // Bascule archive d'un jalon (case à cocher timeline / Gantt).
+  // Les deliverables ne sont pas archivables ici — la case ne s'affiche pas.
+  async function handleToggleArchive(milestoneId, nextArchived) {
+    setArchiveError(null)
+    const { error } = await supabase
+      .from('milestones')
+      .update({ archived: nextArchived })
+      .eq('id', milestoneId)
+    if (error) {
+      setArchiveError(error.message)
+      return
+    }
+    setReloadKey(k => k + 1)
   }
 
   return (
@@ -183,6 +226,12 @@ export default function Calendrier() {
 
       <Filters filters={filters} onChange={updateFilter} lots={lots} />
 
+      {archiveError ? (
+        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {archiveError}
+        </p>
+      ) : null}
+
       {projectLoading || loading ? (
         <div className="space-y-3">
           <div className="h-12 animate-pulse rounded-lg border border-slate-200 bg-white" />
@@ -191,59 +240,100 @@ export default function Calendrier() {
         </div>
       ) : error ? (
         <ErrorState error={error} />
-      ) : grouped.length === 0 ? (
-        <EmptyState hasFilters={Object.values(filters).some(v => v !== 'all')} />
       ) : (
-        <div className="space-y-8">
-          {grouped.map(([monthKey, entries]) => (
-            <MonthSection
-              key={monthKey}
-              monthKey={monthKey}
-              items={entries}
-              lots={lots}
-              milestoneCommentCounts={milestoneCommentCounts}
-              onMilestoneClick={(milestoneId) => {
-                const m = milestones.find(x => x.id === milestoneId)
-                if (m) setDetailMilestone(m)
-              }}
-            />
-          ))}
-        </div>
-      )}
+        <>
+          {/* ─── Vue Gantt (en haut) ───────────────────────────────────── */}
+          {activeItems.length > 0 ? (
+            <section>
+              <div className="hidden md:block space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setShowGantt(s => !s)}
+                  className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-brand-navy shadow-sm transition hover:border-brand-blue"
+                >
+                  <span>Vue Gantt — Calendrier global</span>
+                  <span className="text-xs font-medium text-slate-500">
+                    {showGantt ? 'Masquer ▾' : 'Afficher ▸'}
+                  </span>
+                </button>
+                {showGantt ? (
+                  <GanttView
+                    items={activeItems}
+                    funders={funders}
+                    onMilestoneClick={(milestoneId) => {
+                      const m = milestones.find(x => x.id === milestoneId)
+                      if (m) setDetailMilestone(m)
+                    }}
+                    onDeliverableClick={(deliverableId) => {
+                      const d = deliverables.find(x => x.id === deliverableId)
+                      if (d) setEditDeliverable(d)
+                    }}
+                    onToggleArchive={handleToggleArchive}
+                  />
+                ) : null}
+              </div>
+              <div className="block md:hidden rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-500">
+                La vue Gantt est disponible sur écran large (≥ 768 px).
+              </div>
+            </section>
+          ) : null}
 
-      {!loading && !error && filtered.length > 0 ? (
-        <section className="border-t border-slate-200 pt-6">
-          <div className="hidden md:block space-y-3">
+          {/* ─── Timeline mois (en bas) ────────────────────────────────── */}
+          <section className="space-y-3">
             <button
               type="button"
-              onClick={() => setShowGantt(s => !s)}
+              onClick={() => setShowTimeline(s => !s)}
               className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-brand-navy shadow-sm transition hover:border-brand-blue"
             >
-              <span>Vue Gantt — Calendrier global</span>
+              <span>Timeline mensuelle</span>
               <span className="text-xs font-medium text-slate-500">
-                {showGantt ? 'Masquer ▾' : 'Afficher ▸'}
+                {showTimeline ? 'Masquer ▾' : 'Afficher ▸'}
               </span>
             </button>
-            {showGantt ? (
-              <GanttView
-                items={filtered}
-                funders={funders}
+
+            {showTimeline ? (
+              grouped.length === 0 ? (
+                <EmptyState hasFilters={Object.values(filters).some(v => v !== 'all')} />
+              ) : (
+                <div className="space-y-6">
+                  {grouped.map(([monthKey, entries]) => (
+                    <MonthSection
+                      key={monthKey}
+                      monthKey={monthKey}
+                      items={entries}
+                      lots={lots}
+                      milestoneCommentCounts={milestoneCommentCounts}
+                      collapsed={collapsedMonths.has(monthKey)}
+                      onToggleCollapse={() => toggleMonth(monthKey)}
+                      onMilestoneClick={(milestoneId) => {
+                        const m = milestones.find(x => x.id === milestoneId)
+                        if (m) setDetailMilestone(m)
+                      }}
+                      onToggleArchive={handleToggleArchive}
+                    />
+                  ))}
+                </div>
+              )
+            ) : null}
+
+            {/* Section Archive en bas de la timeline */}
+            {showTimeline && archivedItems.length > 0 ? (
+              <ArchiveSection
+                items={archivedItems}
+                lots={lots}
+                open={archiveOpen}
+                onToggle={() => setArchiveOpen(o => !o)}
+                milestoneCommentCounts={milestoneCommentCounts}
                 onMilestoneClick={(milestoneId) => {
                   const m = milestones.find(x => x.id === milestoneId)
                   if (m) setDetailMilestone(m)
                 }}
-                onDeliverableClick={(deliverableId) => {
-                  const d = deliverables.find(x => x.id === deliverableId)
-                  if (d) setEditDeliverable(d)
-                }}
+                onToggleArchive={handleToggleArchive}
               />
             ) : null}
-          </div>
-          <div className="block md:hidden rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-500">
-            La vue Gantt est disponible sur écran large (≥ 768 px).
-          </div>
-        </section>
-      ) : null}
+          </section>
+        </>
+      )}
 
       <NewMilestoneModal
         open={modalOpen}
@@ -335,86 +425,169 @@ function FilterSelect({ label, value, onChange, children }) {
   )
 }
 
-function MonthSection({ monthKey, items, lots, milestoneCommentCounts, onMilestoneClick }) {
+function MonthSection({
+  monthKey,
+  items,
+  lots,
+  milestoneCommentCounts,
+  collapsed,
+  onToggleCollapse,
+  onMilestoneClick,
+  onToggleArchive,
+}) {
   const lotsById = Object.fromEntries(lots.map(l => [l.id, l]))
   return (
     <section>
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-        {formatMonth(monthKey)}
-      </h2>
-      <ol className="relative ml-3 space-y-3 border-l-2 border-slate-200 pl-6">
-        {items.map(item => {
-          const type = milestoneType(item.type)
-          const lot = item.lotId ? lotsById[item.lotId] : null
-          const isMilestone = item.source === 'milestone'
-          const milestoneId = isMilestone ? item.id.replace(/^milestone-/, '') : null
-          const commentCount = isMilestone ? (milestoneCommentCounts.get(milestoneId) ?? 0) : 0
-          const dateLabel = item.source === 'milestone'
-            ? formatDateRange(item.startDate, item.endDate)
-            : formatDateOnly(item.startDate)
-          const Card = (
-            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm transition-colors group-hover:border-brand-blue group-hover:bg-slate-50">
-              <div className="flex flex-wrap items-baseline gap-3">
-                <span className="shrink-0 text-xs font-medium text-slate-500 tabular-nums">
-                  {dateLabel}
-                </span>
-                <span className={`inline-flex shrink-0 rounded px-2 py-0.5 text-[11px] font-medium ${type.badge}`}>
-                  {type.label}
-                </span>
-                <span className="flex-1 text-sm font-medium text-slate-900">
-                  {item.title}
-                  {isMilestone ? (
-                    <ModifiedBadge
-                      importedValue={item.importedValue}
-                      modifiedAt={item.modifiedAt}
-                      modifiedByName={item.modifiedByName}
-                      fieldLabels={MILESTONE_LABELS}
-                    />
-                  ) : null}
-                </span>
-                {isMilestone ? (
-                  <CommentBadge count={commentCount} />
-                ) : null}
-                {item.country ? (
-                  <span title={countryName(item.country)} aria-label={countryName(item.country)}>
-                    {countryFlag(item.country)}
-                  </span>
-                ) : null}
-              </div>
-              {(item.context || lot || item.notes) ? (
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  {lot ? <span>{lot.name}</span> : null}
-                  {item.context && !lot ? <span>{item.context}</span> : null}
-                  {item.context && lot ? <span>· {item.context}</span> : null}
-                  {item.notes ? <span className="italic">— {item.notes}</span> : null}
-                  {item.source === 'deliverable' ? (
-                    <span className="ml-auto text-[11px] uppercase tracking-wide text-slate-400">livrable</span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          )
-          return (
-            <li key={item.id} className="relative">
-              <span
-                className="absolute -left-[31px] top-3 inline-block h-3 w-3 rounded-full border-2 border-white bg-[color:var(--color-brand-navy)]"
-                aria-hidden="true"
-              />
-              {isMilestone ? (
-                <button
-                  type="button"
-                  onClick={() => onMilestoneClick(milestoneId)}
-                  className="group block w-full text-left"
-                >
-                  {Card}
-                </button>
-              ) : (
-                Card
-              )}
-            </li>
-          )
-        })}
-      </ol>
+      <button
+        type="button"
+        onClick={onToggleCollapse}
+        className="mb-3 flex w-full items-center justify-between rounded px-1 py-1 text-left transition hover:bg-slate-100"
+        aria-expanded={!collapsed}
+      >
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          {formatMonth(monthKey)}
+          <span className="ml-2 text-[11px] font-normal normal-case tracking-normal text-slate-400">
+            {items.length} {items.length > 1 ? 'entrées' : 'entrée'}
+          </span>
+        </h2>
+        <span className="text-xs text-slate-400">{collapsed ? '▸' : '▾'}</span>
+      </button>
+      {collapsed ? null : (
+        <ol className="relative ml-3 space-y-3 border-l-2 border-slate-200 pl-6">
+          {items.map(item => (
+            <TimelineItem
+              key={item.id}
+              item={item}
+              lotsById={lotsById}
+              milestoneCommentCounts={milestoneCommentCounts}
+              onMilestoneClick={onMilestoneClick}
+              onToggleArchive={onToggleArchive}
+            />
+          ))}
+        </ol>
+      )}
+    </section>
+  )
+}
+
+function TimelineItem({ item, lotsById, milestoneCommentCounts, onMilestoneClick, onToggleArchive, dimmed }) {
+  const type = milestoneType(item.type)
+  const lot = item.lotId ? lotsById[item.lotId] : null
+  const isMilestone = item.source === 'milestone'
+  const milestoneId = isMilestone ? item.id.replace(/^milestone-/, '') : null
+  const commentCount = isMilestone ? (milestoneCommentCounts.get(milestoneId) ?? 0) : 0
+  const dateLabel = item.source === 'milestone'
+    ? formatDateRange(item.startDate, item.endDate)
+    : formatDateOnly(item.startDate)
+
+  const Card = (
+    <div className={`rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm transition-colors group-hover:border-brand-blue group-hover:bg-slate-50 ${dimmed ? 'opacity-70' : ''}`}>
+      <div className="flex flex-wrap items-baseline gap-3">
+        <span className="shrink-0 text-xs font-medium text-slate-500 tabular-nums">
+          {dateLabel}
+        </span>
+        <span className={`inline-flex shrink-0 rounded px-2 py-0.5 text-[11px] font-medium ${type.badge}`}>
+          {type.label}
+        </span>
+        {item.archived ? (
+          <span className="inline-flex shrink-0 rounded bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+            Archivé
+          </span>
+        ) : null}
+        <span className="flex-1 text-sm font-medium text-slate-900">
+          {item.title}
+          {isMilestone ? (
+            <ModifiedBadge
+              importedValue={item.importedValue}
+              modifiedAt={item.modifiedAt}
+              modifiedByName={item.modifiedByName}
+              fieldLabels={MILESTONE_LABELS}
+            />
+          ) : null}
+        </span>
+        {isMilestone ? (
+          <CommentBadge count={commentCount} />
+        ) : null}
+        {item.country ? (
+          <span title={countryName(item.country)} aria-label={countryName(item.country)}>
+            {countryFlag(item.country)}
+          </span>
+        ) : null}
+        {isMilestone && onToggleArchive ? (
+          <ArchiveCheckbox
+            checked={item.archived}
+            onChange={(next) => onToggleArchive(milestoneId, next)}
+          />
+        ) : null}
+      </div>
+      {(item.context || lot || item.notes) ? (
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          {lot ? <span>{lot.name}</span> : null}
+          {item.context && !lot ? <span>{item.context}</span> : null}
+          {item.context && lot ? <span>· {item.context}</span> : null}
+          {item.notes ? <span className="italic">— {item.notes}</span> : null}
+          {item.source === 'deliverable' ? (
+            <span className="ml-auto text-[11px] uppercase tracking-wide text-slate-400">livrable</span>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+
+  return (
+    <li className="relative">
+      <span
+        className="absolute -left-[31px] top-3 inline-block h-3 w-3 rounded-full border-2 border-white bg-[color:var(--color-brand-navy)]"
+        aria-hidden="true"
+      />
+      {isMilestone ? (
+        <button
+          type="button"
+          onClick={() => onMilestoneClick(milestoneId)}
+          className="group block w-full text-left"
+        >
+          {Card}
+        </button>
+      ) : (
+        Card
+      )}
+    </li>
+  )
+}
+
+function ArchiveSection({ items, lots, open, onToggle, milestoneCommentCounts, onMilestoneClick, onToggleArchive }) {
+  const lotsById = Object.fromEntries(lots.map(l => [l.id, l]))
+  return (
+    <section className="rounded-lg border border-slate-200 bg-slate-50">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-4 py-3 text-left transition hover:bg-slate-100"
+        aria-expanded={open}
+      >
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Archive
+          <span className="ml-2 text-[11px] font-normal normal-case tracking-normal text-slate-400">
+            {items.length} {items.length > 1 ? 'jalons archivés' : 'jalon archivé'}
+          </span>
+        </h2>
+        <span className="text-xs text-slate-400">{open ? '▾' : '▸'}</span>
+      </button>
+      {open ? (
+        <ol className="relative ml-7 space-y-3 border-l-2 border-slate-200 pb-4 pl-6 pr-4">
+          {items.map(item => (
+            <TimelineItem
+              key={item.id}
+              item={item}
+              lotsById={lotsById}
+              milestoneCommentCounts={milestoneCommentCounts}
+              onMilestoneClick={onMilestoneClick}
+              onToggleArchive={onToggleArchive}
+              dimmed
+            />
+          ))}
+        </ol>
+      ) : null}
     </section>
   )
 }
