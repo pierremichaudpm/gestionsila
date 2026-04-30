@@ -35,11 +35,13 @@ export default function UpcomingDeliverablesBlock({ projectId }) {
         .limit(10)
 
       // Inclut les jalons ponctuels (end_date NULL) dont la start_date est
-      // encore à venir ou aujourd'hui.
+      // encore à venir ou aujourd'hui. Les jalons archivés sortent des
+      // prochaines échéances (archived=false).
       const milestonesQ = supabase
         .from('milestones')
         .select('id, title, start_date, end_date, type, country')
         .eq('project_id', projectId)
+        .eq('archived', false)
         .or(`end_date.gte.${today},and(end_date.is.null,start_date.gte.${today})`)
         .order('start_date', { ascending: true })
         .limit(10)

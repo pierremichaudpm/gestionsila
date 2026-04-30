@@ -43,11 +43,12 @@ export default function AttentionBlock({ projectId }) {
         .order('due_date', { ascending: true })
 
       // Pour les jalons ponctuels (end_date NULL), c'est start_date qui sert
-      // de deadline.
+      // de deadline. Les jalons archivés ne remontent pas (archived=false).
       const milestonesQ = supabase
         .from('milestones')
         .select('id, title, start_date, end_date, type, country')
         .eq('project_id', projectId)
+        .eq('archived', false)
         .or(`end_date.lte.${horizonDate},and(end_date.is.null,start_date.lte.${horizonDate})`)
         .order('start_date', { ascending: true })
 

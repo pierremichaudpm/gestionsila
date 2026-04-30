@@ -17,11 +17,16 @@ export default function LotsBlock({ projectId }) {
       setLoading(true)
       setError(null)
 
+      // Le compteur de jalons par tableau exclut les jalons archivés
+      // (cohérent avec le filtre par défaut du Calendrier). Le compteur
+      // documents reste exhaustif (pas de notion d'archive sur documents
+      // ici — c'est le validation_status qui tient ce rôle).
       const [lotsRes, docsRes, msRes] = await Promise.all([
         supabase
           .from('lots')
           .select('id, name, director, country, status, sort_order, documents(count), milestones(count)')
           .eq('project_id', projectId)
+          .eq('milestones.archived', false)
           .order('sort_order', { ascending: true }),
         supabase
           .from('documents')
@@ -32,6 +37,7 @@ export default function LotsBlock({ projectId }) {
           .from('milestones')
           .select('id', { count: 'exact', head: true })
           .eq('project_id', projectId)
+          .eq('archived', false)
           .is('lot_id', null),
       ])
 
