@@ -177,6 +177,7 @@ export function folderForCategory(category) {
 
 export const LOT_STATUS_OPTIONS = Object.keys(LOT_STATUS)
 export const DELIVERABLE_STATUS_OPTIONS = Object.keys(DELIVERABLE_STATUS)
+export const FUNDER_STATUS_OPTIONS = Object.keys(FUNDER_STATUS)
 export const VALIDATION_STATUS_OPTIONS = Object.keys(VALIDATION_STATUS)
 export const DOCUMENT_CATEGORY_OPTIONS = Object.keys(DOCUMENT_CATEGORY)
 export const COUNTRY_OPTIONS = Object.keys(COUNTRY_FLAGS)
