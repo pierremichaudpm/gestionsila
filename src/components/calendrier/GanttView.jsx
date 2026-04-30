@@ -21,7 +21,6 @@ const LANE_HEADER_H = 44      // px du header de swimlane
 // éventuelle lane fallback pour les jalons internes sans country.
 const INTERNAL_PREFIX = '__internal__'
 const internalKey = (country) => `${INTERNAL_PREFIX}:${country ?? 'null'}`
-const isInternalKey = (key) => typeof key === 'string' && key.startsWith(INTERNAL_PREFIX)
 
 // Ordre déterministe des pays internes : CA → FR → LU → autres.
 const INTERNAL_COUNTRY_ORDER = ['CA', 'FR', 'LU']
@@ -43,10 +42,28 @@ export default function GanttView({
   const range = useMemo(() => computeRange(items), [items])
 
   // ─── Regroupement par swimlane ────────────────────────────────────
-  // Production interne : une lane par pays (CA / FR / LU + fallback).
-  // Bailleurs : une lane par funder_id.
+  // Production interne : une lane par pays. Les 3 lanes (CA / FR / LU)
+  // sont toujours présentes même vides — Virginie veut voir la structure
+  // des 3 pays internes en permanence, pas seulement quand il y a des
+  // jalons (sinon une absence de jalon LU faisait disparaître la lane LU).
+  // Bailleurs : une lane par funder_id, n'apparaît que s'il a des items.
   const lanes = useMemo(() => {
     const map = new Map() // key -> { key, funder, items[], color, name, country, isInternal }
+
+    // Pré-amorçage des 3 lanes internes (vides par défaut).
+    for (const country of INTERNAL_COUNTRY_ORDER) {
+      const key = internalKey(country)
+      map.set(key, {
+        key,
+        funder: null,
+        items: [],
+        color: getInternalColor(country),
+        name: internalLabel(country),
+        country,
+        isInternal: true,
+      })
+    }
+
     for (const item of items) {
       const isInternal = !item.funderId
       const key = isInternal ? internalKey(item.country) : item.funderId
@@ -273,19 +290,36 @@ function Swimlane({ lane, rangeStart, scaleWidth, onMilestoneClick, onDeliverabl
         <div style={{ width: scaleWidth }} />
       </div>
 
-      {/* Rangs d'items */}
-      {lane.items.map(item => (
-        <ItemRow
-          key={item.id}
-          item={item}
-          color={lane.color}
-          rangeStart={rangeStart}
-          scaleWidth={scaleWidth}
-          onMilestoneClick={onMilestoneClick}
-          onDeliverableClick={onDeliverableClick}
-          onToggleArchive={onToggleArchive}
-        />
-      ))}
+      {/* Rangs d'items — placeholder italique si la lane est vide
+          (utilisé pour les 3 lanes internes CA / FR / LU toujours
+          affichées même sans jalon). */}
+      {lane.items.length === 0 ? (
+        <div
+          className="flex items-stretch border-b border-slate-100 last:border-b-0"
+          style={{ height: ROW_H }}
+        >
+          <div
+            className="flex shrink-0 items-center border-r border-slate-200 pl-9 pr-4 text-[12px] italic text-slate-400"
+            style={{ width: LABEL_W }}
+          >
+            Aucun jalon
+          </div>
+          <div style={{ width: scaleWidth }} />
+        </div>
+      ) : (
+        lane.items.map(item => (
+          <ItemRow
+            key={item.id}
+            item={item}
+            color={lane.color}
+            rangeStart={rangeStart}
+            scaleWidth={scaleWidth}
+            onMilestoneClick={onMilestoneClick}
+            onDeliverableClick={onDeliverableClick}
+            onToggleArchive={onToggleArchive}
+          />
+        ))
+      )}
     </div>
   )
 }
