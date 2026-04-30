@@ -18,6 +18,7 @@ import {
 } from '../lib/format'
 import NewDocumentModal from '../components/documents/NewDocumentModal.jsx'
 import EditDocumentModal from '../components/documents/EditDocumentModal.jsx'
+import DocumentSearchPanel from '../components/documents/DocumentSearchPanel.jsx'
 import CommentThread from '../components/comments/CommentThread.jsx'
 import CommentBadge from '../components/comments/CommentBadge.jsx'
 import ModifiedBadge from '../components/audit/ModifiedBadge.jsx'
@@ -40,6 +41,7 @@ export default function Documents() {
   const [sort, setSort] = useState({ key: 'updated_at', dir: 'desc' })
   const [page, setPage] = useState(0)
   const [modalOpen, setModalOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [editingDoc, setEditingDoc] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [actionError, setActionError] = useState(null)
@@ -186,14 +188,24 @@ export default function Documents() {
             </>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          disabled={!projectId || !profile}
-          className="rounded-lg bg-[color:var(--color-brand-navy)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[color:var(--color-brand-blue)] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          + Nouveau document
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            disabled={!projectId}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-brand-blue hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            🔍 Rechercher
+          </button>
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            disabled={!projectId || !profile}
+            className="rounded-lg bg-[color:var(--color-brand-navy)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[color:var(--color-brand-blue)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            + Nouveau document
+          </button>
+        </div>
       </header>
 
       {projectLoading || loading ? (
@@ -250,6 +262,17 @@ export default function Documents() {
         onClose={() => setEditingDoc(null)}
         onSaved={() => { setEditingDoc(null); setReloadKey(k => k + 1) }}
         onDeleted={() => { setEditingDoc(null); setReloadKey(k => k + 1) }}
+      />
+
+      <DocumentSearchPanel
+        open={searchOpen}
+        projectId={projectId}
+        lots={lots}
+        onClose={() => setSearchOpen(false)}
+        onPickDocument={(doc) => {
+          setSearchOpen(false)
+          setEditingDoc(doc)
+        }}
       />
     </div>
   )
