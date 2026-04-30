@@ -30,8 +30,31 @@ const FALLBACK_PALETTE = [
   '#8b3a62', '#5a6b2f',
 ]
 
-export const INTERNAL_COLOR = '#5a5248' // taupe encre
+export const INTERNAL_COLOR = '#5a5248' // taupe encre — fallback (pas de pays)
 export const INTERNAL_LABEL = 'Production interne'
+
+// Couleurs des swimlanes "Production interne — pays".
+// Demande Virginie 2026-04-30 : un jalon interne hérite de la couleur de son
+// pays plutôt que d'un taupe générique.
+//   CA → bordeaux foncé (distinct du SODEC #a8243a, palette éditoriale chaude)
+//   FR → bleu marine France (sobre, distinct du FFL #2a4468)
+//   LU → bleu Luxembourg plus clair (distinct du FFL — Luxembourg lui aussi
+//        est "bleu" mais foncé)
+const INTERNAL_BY_COUNTRY = {
+  CA: '#7a1726',
+  FR: '#002654',
+  LU: '#00a4d6',
+}
+
+export function getInternalColor(country) {
+  return INTERNAL_BY_COUNTRY[country] ?? INTERNAL_COLOR
+}
+
+export function internalLabel(country) {
+  return country
+    ? `${INTERNAL_LABEL} — ${country}`
+    : INTERNAL_LABEL
+}
 
 export function getFunderColor(funderId) {
   if (!funderId) return INTERNAL_COLOR

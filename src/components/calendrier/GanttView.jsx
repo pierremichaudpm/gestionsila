@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { countryFlag, milestoneType } from '../../lib/format'
-import { getFunderColor, INTERNAL_LABEL } from './ganttColors'
+import { getFunderColor, getInternalColor, internalLabel } from './ganttColors'
 import ArchiveCheckbox from './ArchiveCheckbox.jsx'
 
 // Vue Gantt complémentaire de la timeline verticale du Calendrier.
@@ -17,7 +17,18 @@ const LABEL_W = 240           // px de la colonne fixe à gauche
 const ROW_H = 40              // px par ligne d'item
 const LANE_HEADER_H = 44      // px du header de swimlane
 
-const INTERNAL_KEY = '__internal__'
+// Préfixe des swimlanes "Production interne". Une lane par pays + une
+// éventuelle lane fallback pour les jalons internes sans country.
+const INTERNAL_PREFIX = '__internal__'
+const internalKey = (country) => `${INTERNAL_PREFIX}:${country ?? 'null'}`
+const isInternalKey = (key) => typeof key === 'string' && key.startsWith(INTERNAL_PREFIX)
+
+// Ordre déterministe des pays internes : CA → FR → LU → autres.
+const INTERNAL_COUNTRY_ORDER = ['CA', 'FR', 'LU']
+function internalCountryRank(country) {
+  const i = INTERNAL_COUNTRY_ORDER.indexOf(country)
+  return i === -1 ? 99 : i
+}
 
 export default function GanttView({
   items,
@@ -32,21 +43,25 @@ export default function GanttView({
   const range = useMemo(() => computeRange(items), [items])
 
   // ─── Regroupement par swimlane ────────────────────────────────────
+  // Production interne : une lane par pays (CA / FR / LU + fallback).
+  // Bailleurs : une lane par funder_id.
   const lanes = useMemo(() => {
-    const map = new Map() // key -> { key, funder, items[], color, name }
+    const map = new Map() // key -> { key, funder, items[], color, name, country, isInternal }
     for (const item of items) {
-      const key = item.funderId ?? INTERNAL_KEY
+      const isInternal = !item.funderId
+      const key = isInternal ? internalKey(item.country) : item.funderId
       if (!map.has(key)) {
-        const funder = item.funderId
+        const funder = !isInternal
           ? funders.find(f => f.id === item.funderId) ?? null
           : null
         map.set(key, {
           key,
           funder,
           items: [],
-          color: getFunderColor(item.funderId),
-          name: funder?.name ?? INTERNAL_LABEL,
-          country: funder?.country ?? null,
+          color: isInternal ? getInternalColor(item.country) : getFunderColor(item.funderId),
+          name: isInternal ? internalLabel(item.country) : (funder?.name ?? internalLabel(null)),
+          country: isInternal ? item.country : (funder?.country ?? null),
+          isInternal,
         })
       }
       map.get(key).items.push(item)
@@ -55,10 +70,18 @@ export default function GanttView({
     for (const lane of map.values()) {
       lane.items.sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0))
     }
-    // Ordre des lanes : bailleurs A→Z, "Production interne" en dernier
+    // Ordre des lanes :
+    //   1. Production interne en haut, par pays (CA → FR → LU → autres)
+    //   2. Bailleurs en dessous, A→Z
     return Array.from(map.values()).sort((a, b) => {
-      if (a.key === INTERNAL_KEY) return 1
-      if (b.key === INTERNAL_KEY) return -1
+      if (a.isInternal && !b.isInternal) return -1
+      if (!a.isInternal && b.isInternal) return 1
+      if (a.isInternal && b.isInternal) {
+        const rA = internalCountryRank(a.country)
+        const rB = internalCountryRank(b.country)
+        if (rA !== rB) return rA - rB
+        return (a.country ?? '').localeCompare(b.country ?? '')
+      }
       return a.name.localeCompare(b.name)
     })
   }, [items, funders])
@@ -93,7 +116,7 @@ export default function GanttView({
           active={funderFilter === 'all'}
           onClick={() => setFunderFilter('all')}
           color="#5a5248"
-          label="Tous les bailleurs"
+          label="Tout"
           count={items.length}
         />
         {lanes.map(lane => (
@@ -103,7 +126,7 @@ export default function GanttView({
             onClick={() => setFunderFilter(funderFilter === lane.key ? 'all' : lane.key)}
             color={lane.color}
             label={lane.name}
-            country={lane.country}
+            country={lane.isInternal ? null : lane.country}
             count={lane.items.length}
           />
         ))}
@@ -242,7 +265,7 @@ function Swimlane({ lane, rangeStart, scaleWidth, onMilestoneClick, onDeliverabl
               {lane.name}
             </div>
             <div className="truncate text-[10.5px] uppercase tracking-wide text-slate-500">
-              {lane.country ? `${countryFlag(lane.country)} · ` : ''}
+              {lane.country && !lane.isInternal ? `${countryFlag(lane.country)} · ` : ''}
               {lane.items.length} {lane.items.length === 1 ? 'entrée' : 'entrées'}
             </div>
           </div>
