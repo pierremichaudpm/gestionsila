@@ -14,6 +14,8 @@ import {
   validationStatus,
 } from '../lib/format'
 import CommentThread from '../components/comments/CommentThread.jsx'
+import CommentBadge from '../components/comments/CommentBadge.jsx'
+import { useCommentCounts } from '../components/comments/useCommentCounts.js'
 
 export default function LotDetail() {
   const { id } = useParams()
@@ -161,7 +163,7 @@ export default function LotDetail() {
       </div>
 
       {tab === 'documents' ? (
-        <LotDocuments lotId={lot.id} />
+        <LotDocuments lotId={lot.id} projectId={lot.project_id} />
       ) : (
         <LotLivrables />
       )}
@@ -194,10 +196,12 @@ function TabButton({ active, onClick, children }) {
   )
 }
 
-function LotDocuments({ lotId }) {
+function LotDocuments({ lotId, projectId }) {
   const [docs, setDocs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [expandedId, setExpandedId] = useState(null)
+  const [commentBump, setCommentBump] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -222,6 +226,9 @@ function LotDocuments({ lotId }) {
     load()
     return () => { alive = false }
   }, [lotId])
+
+  const docIds = docs.map(d => d.id)
+  const commentCounts = useCommentCounts(projectId, 'document', docIds, commentBump)
 
   if (loading) return <div className="h-24 animate-pulse rounded-lg border border-slate-200 bg-white" />
   if (error) {
@@ -248,26 +255,49 @@ function LotDocuments({ lotId }) {
     <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white shadow-sm">
       {docs.map(doc => {
         const v = validationStatus(doc.validation_status)
+        const expanded = expandedId === doc.id
+        const count = commentCounts.get(doc.id) ?? 0
         return (
-          <li key={doc.id} className="flex items-center gap-4 px-5 py-3 text-sm">
-            <span className={`inline-flex rounded px-2 py-0.5 text-[11px] font-medium ${categoryBadgeClass(doc.category)}`}>
-              {documentCategory(doc.category)}
-            </span>
-            <span className="flex-1 truncate font-medium text-slate-900">
-              {doc.title} <span className="text-slate-400">v{doc.version}</span>
-            </span>
-            <span className={`inline-flex rounded px-2 py-0.5 text-[11px] font-medium ${toneClass(v.tone)}`}>
-              {v.label}
-            </span>
-            <span className="hidden text-xs text-slate-400 sm:inline">{relativeTime(doc.updated_at)}</span>
-            <a
-              href={doc.drive_url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-brand-blue hover:underline"
-            >
-              Drive ↗
-            </a>
+          <li key={doc.id}>
+            <div className="flex items-center gap-4 px-5 py-3 text-sm">
+              <span className={`inline-flex rounded px-2 py-0.5 text-[11px] font-medium ${categoryBadgeClass(doc.category)}`}>
+                {documentCategory(doc.category)}
+              </span>
+              <span className="flex-1 truncate font-medium text-slate-900">
+                {doc.title} <span className="text-slate-400">v{doc.version}</span>
+              </span>
+              <span className={`inline-flex rounded px-2 py-0.5 text-[11px] font-medium ${toneClass(v.tone)}`}>
+                {v.label}
+              </span>
+              <span className="hidden text-xs text-slate-400 sm:inline">{relativeTime(doc.updated_at)}</span>
+              <button
+                type="button"
+                onClick={() => setExpandedId(prev => prev === doc.id ? null : doc.id)}
+                aria-expanded={expanded}
+                className="rounded px-1.5 py-1 hover:bg-slate-100"
+                title={expanded ? 'Masquer les commentaires' : 'Afficher les commentaires'}
+              >
+                <CommentBadge count={count} />
+              </button>
+              <a
+                href={doc.drive_url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-brand-blue hover:underline"
+              >
+                Drive ↗
+              </a>
+            </div>
+            {expanded ? (
+              <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-4">
+                <CommentThread
+                  projectId={projectId}
+                  entityType="document"
+                  entityId={doc.id}
+                  onCountChange={() => setCommentBump(b => b + 1)}
+                />
+              </div>
+            ) : null}
           </li>
         )
       })}
