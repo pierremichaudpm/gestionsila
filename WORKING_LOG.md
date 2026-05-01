@@ -1,5 +1,85 @@
 # WORKING_LOG — Gestion SILA
 
+## Session 2026-05-01 — Phase 3.6 : batch 12 modifs Virginie (4 sections + 2 fixes)
+
+### Objectif
+Livrer le batch de 12 modifications demandées par Virginie en 4 commits structurés (un par section, pour permettre un revert chirurgical si besoin) : refonte du Calendrier avec archivage et inversion Gantt/timeline, palette par pays sur le Gantt, regroupement Livrables par pays + slide-over bailleur, recherche cross-folders sur Documents.
+
+### Ce qui a été fait
+
+#### Section 1 — Calendrier : archivage + inversion Gantt/timeline (commit `994d9f7`)
+- **Migration 025** : `milestones.archived` (bool NOT NULL default false) + `archived_at` (timestamptz nullable) + `archived_by` (FK users nullable, ON DELETE SET NULL) + index `(project_id, archived)`. Trigger BEFORE INSERT/UPDATE `protect_milestone_archive_columns` qui force timestamps autoritatifs côté serveur (cohérent avec pattern 019). Si flip true→ archived_at=now() + archived_by=auth.uid() ; si flip false → reset des deux à NULL ; si pas de transition → fige aux valeurs OLD.
+- **Inversion ordre Calendrier** : Vue Gantt déplacée en haut (entrée principale), Timeline mensuelle en bas. Toggles « Masquer/Afficher » indépendants sur les deux. Décision : maintenir activeItems > 0 comme condition de rendu du Gantt (sinon il s'affiche vide à l'arrivée sur la page).
+- **Mois rétractables** : header de mois cliquable avec chevron ▾/▸. État local `useState(Set)`, **non persisté** en base — perdu au reload (volontaire, pas un bug).
+- **Section Archive** : carte gris clair en bas de la timeline, repliée par défaut, listing identique en opacity réduite + badge « Archivé ». Filtres pays/type/lot s'appliquent aussi à l'archive (cohérence — un user FR ne voit que ses jalons archivés FR).
+- **ArchiveCheckbox** : composant réutilisable avec `e.stopPropagation()` pour ne pas déclencher le clic parent (qui ouvre la modal détail). Câblé sur les 2 surfaces : timeline (chaque entrée milestone) et colonne label du Gantt (`ItemRow`).
+- **TimelineItem** extrait du composant `MonthSection` pour réutiliser le rendu dans `ArchiveSection` avec un mode `dimmed`. Évite la duplication.
+- Les deliverables n'ont pas de case (cohérent avec décision Virginie : leur statut « validé » fait office d'archive côté Livrables).
+
+#### Section 2 — Vue Gantt : palette par pays + réordre swimlanes (commit `8ee186e`)
+- **Palette interne par pays** dans `ganttColors.js` : `getInternalColor(country)` retourne `#7a1726` pour CA (bordeaux foncé, distinct du SODEC `#a8243a`), `#002654` pour FR (bleu marine France), `#00a4d6` pour LU (bleu Luxembourg plus clair). Le taupe générique `#5a5248` reste en fallback pour les jalons internes sans country. `internalLabel(country)` produit « Production interne — CA / FR / LU ».
+- **Split swimlane interne** : la lane unique `__internal__` est splittée en autant de swimlanes que de pays internes (`__internal__:CA` / `:FR` / `:LU`).
+- **Réordre** : swimlanes internes en haut (CA → FR → LU déterministe), bailleurs A→Z en dessous. Avant : bailleurs en haut, interne tout en bas.
+- **Légende** : refl ète les nouveaux libellés. Drapeau retiré pour les chips internes (le suffixe « — CA » porte déjà l'info, évite la redondance) ; conservé pour les chips bailleurs. Chip « Tous les bailleurs » renommé en « Tout » (plus juste depuis qu'il y a aussi des lanes internes).
+
+#### Section 3 — Livrables : hiérarchie pays + slide-over + archivage FFL Dév (commit `5d30428`)
+- **Migration 026** : `funders.archived` (bool NOT NULL default false) + `funders.notes` (text nullable) + index `(project_id, archived)`. Pas de timestamp/FK auteur sur l'archive funder (acte rare, admin-only en pratique). DELETE du livrable « FilmFund Dév. — note d'intention » (id 0003, statut `submitted` au moment de la décision) + UPDATE FFL Dév archived=true. Décision Virginie option C.
+- **SlideOver** : wrapper réutilisable (panneau droit, backdrop, ESC, click outside, scroll body verrouillé). Largeurs paramétrables (md/lg/xl). Sera repris en Section 4 pour la recherche Documents.
+- **FunderDetailPanel** : 3 zones — édition complète admin (name, country, amount, currency, status, beneficiary_org_id, notes), bouton Archiver/Désarchiver, liste livrables avec threads commentaires (badges via `useCommentCounts` + expansion inline). Lecture seule pour les non-admin. Le panneau s'ouvre aussi pour les bailleurs archivés (depuis la section Archive).
+- **Hiérarchie par pays** dans `Livrables.jsx` : 3 sections de niveau 1 (Canada → France → Luxembourg, ordre déterministe via `countryRank`) avec compteurs « X bailleurs · Y livrables ». Bouton « Détails » discret à droite du nom du bailleur (`border-l` qui sépare visuellement de la zone d'expansion accordéon).
+- **Section Archive** en bas de la page Livrables (cohérente avec le pattern timeline). Bailleurs archivés affichés en `opacity-70` avec badge « Archivé ».
+- **format.js** : exposition de `FUNDER_STATUS_OPTIONS` (manquait — utilisé pour le select d'édition).
+
+#### Section 4 — Documents : bouton Recherche + slide-over cross-folders (commit `bd0b6ff`)
+- **DocumentSearchPanel** : panneau coulissant via `SlideOver`. Champ texte `autoFocus` debounced 300ms. Recherche sur `title.ilike` (cross-folders) + `version.eq` quand la query ressemble à un numéro (regex `^v?(\d+)$` — typiquement « v2 » ou « 10 »). Le `version` étant `int`, l'`ilike` n'est pas possible dessus.
+- **5 filtres** : Sous-dossier, Tableau, Catégorie, Statut, Pays. Tous optionnels, combinables avec la query. Si aucune query ET aucun filtre → empty state (pas de liste-tout par défaut).
+- **NE recherche PAS dans Espace Producteurs** : la table `producer_documents` est isolée des `documents` publics (RLS gated par `has_producer_access`). Le panel n'y touche pas — les producteurs.rices passent par leur section dédiée.
+- **Bouton « 🔍 Rechercher »** placé à gauche de « + Nouveau document » sur les vues niveau 1 (grille de sous-dossiers) et niveau 2 (liste filtrée). Disabled pendant `!projectId` mais pas conditionné à `profile` (recherche read-only).
+- **Clic sur résultat** : ferme le panneau et ouvre `EditDocumentModal` sur le document. La modal gère elle-même les permissions (édition si l'utilisateur a les droits, lecture sinon).
+
+#### Fix swimlanes vides (commit `f7e3e9a`)
+- Bug retour Virginie : « Production interne — LU » disparaissait quand aucun jalon LU n'existait. Probable cas en prod : 0 jalon LU à ce moment.
+- **Fix** : pré-amorçage des 3 lanes internes (CA, FR, LU) dans tous les cas, même vides. Une lane vide affiche « Aucun jalon » en italique gris dans la zone label, la zone temporelle reste vide. L'ordre CA → FR → LU est garanti, indépendant des données.
+- **Comportement bailleurs préservé** : ils n'apparaissent que s'ils ont au moins un item (sinon le Gantt serait pollué par 7+ lanes vides à chaque chargement).
+
+#### Fix Dashboard archivage (commit `f621c0f`)
+- Bug logique remonté par Virginie : un jalon coché archivé continuait d'apparaître dans « Attention requise » et « Prochaines échéances » du Dashboard.
+- **AttentionBlock** : `+ .eq('archived', false)` sur la requête milestones. Deliverables : déjà filtré sur `status IN (to_produce, in_progress)` — validated/submitted naturellement absents.
+- **UpcomingDeliverablesBlock** : idem `.eq('archived', false)` sur les milestones. Filtre deliverables existant inchangé.
+- **LotsBlock** : `.eq('milestones.archived', false)` sur la requête principale (PostgREST filtre la ressource embarquée sans inner-join — les tableaux sans jalon actif apparaissent toujours avec count=0). `.eq('archived', false)` sur le count transversal des jalons sans tableau. Compteurs documents inchangés (pas de notion d'archive sur documents — c'est `validation_status` qui joue ce rôle).
+- **RecentActivityBlock** : non touché. Les entrées d'activité ne sont pas cliquables (juste du texte) — pas de risque de lien mort vers une entité archivée. L'historique reste visible (souhaité, confirmé par Virginie).
+
+### Décisions techniques
+
+- **Triggers autoritatifs sur archived** (025) : pattern 019 réappliqué — le client ne peut pas spoofer `archived_at` ou `archived_by`. Si le client envoie `{archived: true, archived_at: '2020-01-01'}`, le trigger force `archived_at = now()`. Si flip false→true on enregistre, si flip true→false on reset à NULL, si pas de transition on fige aux valeurs `OLD.*`.
+- **Pas d'archived dans les watched_fields de track_imported_changes** : l'archivage est opérationnel, pas éditorial. L'inscrire dans `imported_value` polluerait l'audit du picto ✎ — un jalon archivé puis désarchivé verrait son champ `archived` figé en `imported_value[archived]=true`, ce qui n'a aucun sens.
+- **funders.archived plus simple que milestones.archived** : pas de timestamp ni FK auteur. Justification : un funder est archivé une fois pour toutes (rare), c'est un acte admin, on n'a pas besoin du même niveau d'audit.
+- **funders.notes ajouté en 026** plutôt que dans une migration séparée : il était demandé pour le slide-over d'édition, dans la même section logique. Pas de raison de fragmenter.
+- **DELETE par id exact dans 026** plutôt que par `funder_id` : si Virginie ajoute d'autres livrables FFL Dév en prod entre l'écriture de la migration et son application, on ne les efface pas par accident. Le seed connu n'a qu'un seul livrable lié, c'est l'identifié-nommé qu'on supprime.
+- **SlideOver mutualisé** : 2 utilisations (FunderDetailPanel + DocumentSearchPanel). Investissement justifié — sera également candidate pour les futurs panneaux (édition d'un lot, vue détail livrable, etc.). Différencié de Modal sur 3 points : pleine hauteur, alignement droit, scroll body verrouillé.
+- **Recherche Documents : title + version conditionnelle** : `documents.version` est un `int`, donc `.ilike` impossible. Solution : `.or(title.ilike.X, version.eq.N)` quand la query matche `^v?(\d+)$`, sinon juste `.ilike('title', X)`. La regex couvre « v2 », « v10 », « 10 », « V3 » sans gérer la combinatoire « v2 SODEC » qui serait rare en saisie réelle.
+- **3 lanes internes pré-amorcées dans le Gantt même vides** (fix `f7e3e9a`) : décision UX claire de Virginie. Bénéfice : la structure des 3 pays internes est visible en permanence ; Virginie peut prévoir où vont aller ses futurs jalons LU même quand il n'y en a pas encore. Coût : 2 lanes vides en moyenne (sur SILA, jalons internes principalement CA pour le Tableau IV).
+- **Filtre `archived=false` côté requête sur le Dashboard** plutôt que client-side : moins de données réseau, traitement Postgres optimisé via l'index `(project_id, archived)` créé en 025. Cohérent avec le pattern Calendrier où le split actif/archivé est aussi côté requête.
+- **Commits séparés par section** comme demandé : permet un revert chirurgical si une section pose problème, sans toucher aux autres. La S1 (Calendrier) ne dépend pas de la S2 (Gantt) ni inversement.
+
+### Problèmes rencontrés
+
+- **Pas d'accès psql sans password DB** : le pooler-url ne contient pas le password, pas de `~/.pgpass`, pas de `PGPASSWORD` en env, anon key bloqué par RLS sans session auth. Conséquence : impossible de faire des checks ad-hoc en prod (ex: « combien de jalons LU avant le fix `f7e3e9a` »). Workaround : lire le seed (état initial) et faire le fix UI sans verification de comptes — correct dans tous les cas pour la lane vide. À demander à Virginie/Pierre une seule fois, à mettre dans un .pgpass local pour les futures sessions.
+- **Décision Virginie après écriture 025** : elle a confirmé l'archivage FFL Dév + suppression livrable APRÈS que j'aie écrit la migration 025. D'où la séparation : archivage milestones (025) puis archivage funders + DELETE livrable (026). Si elle avait confirmé en amont, j'aurais pu tout mettre dans 025 — mais la séparation est plus propre fonctionnellement (deux changements de schéma, deux objets archivables, deux migrations).
+- **ESLint a flaggé plusieurs unused vars** au fur et à mesure : `useExchangeRates`, `DELIVERABLE_STATUS_OPTIONS`, `profile`, `useMemo`, `isInternalKey`. Tous corrigés. Note : le code n'est pas exposé à un CI strict (le build Vite passe quand même), mais je tenais à garder les fichiers propres.
+- **Bug logique trouvé en prod après déploiement Section 1** : un jalon archivé restait visible dans « Attention requise ». Pas couvert par la spec initiale Virginie — elle a uniquement décrit le comportement Calendrier (Archive en bas, désarchive en haut). Le Dashboard est une autre surface qui consommait les milestones sans connaissance du nouveau flag. Fix `f621c0f` en passe séparée. À retenir : à chaque ajout de flag de filtrage (archived, deleted, hidden, draft), faire un **grep cross-app** sur toutes les requêtes qui consomment l'entité concernée pour valider qu'elles sont conscientes du flag.
+- **Le Cache navigateur** : Virginie a dû hard-refresh après les premiers déploiements pour voir les changements. Pas un nouveau problème (déjà documenté en avril), mais à rappeler systématiquement dans les retours.
+
+### Prochaines étapes
+
+1. **Tester en bloc avec Virginie / William / Anne-Lise** — les 4 sections + 2 fixes touchent à des surfaces très visibles (Calendrier, Gantt, Livrables, Documents, Dashboard). Voir si la nouvelle hiérarchie par pays sur Livrables est intuitive, si la case d'archivage est trouvable, si la recherche Documents est utilisée.
+2. **Mettre à jour le guide client** — `Guide_Outil_Sila_v3.docx` est encore à jour côté Phase 3.5. Les 4 sections de Phase 3.6 changent le flux d'arrivée sur le Calendrier (Gantt en haut, plus la timeline) et l'organisation Livrables (par pays). Une section « Archiver un jalon ou un bailleur » sera nécessaire si Virginie veut transmettre à l'équipe.
+3. **Bundle vite à 675 KB** — était 651 KB avant ce batch. Le code splitting `React.lazy()` sur Budget et Calendrier devient plus pressant. Phase 4 candidate prioritaire.
+4. **Activity log d'archivage (optionnel)** — si Virginie veut suivre les archivages dans le journal (« Pierre a archivé un jalon : X »), étendre le filtre du trigger `milestones_log_activity` pour fire aussi sur changement de `archived`. Non fait pour ne pas polluer le journal s'il n'y a pas de demande explicite.
+5. **Slide-over pour autres entités** — le wrapper `SlideOver` est prêt. Candidates : édition d'un Tableau (lot), vue détail livrable, panneau participant Équipe. Si la convention « clic Détails → slide-over » plaît à Virginie, on pourra l'étendre.
+6. **Récupérer le password DB** — pour les futurs checks ad-hoc en prod. Soit `.pgpass`, soit prompt interactif au moment du check.
+7. **Recherche dans Espace Producteurs** — actuellement pas couvert. Si Virginie veut chercher dans les contrats / assurances / devis initiaux, créer un `ProducerDocumentSearchPanel` dérivé (gating `has_producer_access` côté composant et RLS côté serveur). Pas demandé pour l'instant.
+
 ## Session 2026-04-28 (suite) — Imports SILA, sous-dossiers, Espace Producteurs, devises duales, édition universelle, traçabilité
 
 ### Objectif

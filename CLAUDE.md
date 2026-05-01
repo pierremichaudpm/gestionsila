@@ -8,7 +8,7 @@ Outil de gestion de production pour coproductions internationales. Première ins
 **Budget Phase 1 :** 3 500 $ CAD
 **Deadline :** Opérationnel mi-mai 2026
 
-## État d'avancement (2026-04-28)
+## État d'avancement (2026-05-01)
 
 **Phase 1 ✓ — déployée en prod : [https://gestion-sila.netlify.app](https://gestion-sila.netlify.app)**
 - Auth flow complet : AuthProvider context, ProtectedRoute, page Login, profil + logout dans la sidebar
@@ -41,6 +41,29 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - **Édition universelle** (014, 015, 017) : 5 modals d'édition (jalons, documents, producer_documents, livrables, profil membre) + extensions inline (currency, org_id, country). Page Équipe : self-edit (full_name + role) ou admin (tous champs avec garde-fou anti-déconnexion). RLS uniformisée sur 7 tables — admin escape partout, production_manager dans le scope écriture sur son pays.
 - **Traçabilité** (018) : 4 colonnes audit (`imported`, `imported_value`, `last_modified_by`, `last_modified_at`) sur 5 tables. Trigger générique `track_imported_changes()` qui capture la valeur d'origine au PREMIER changement de chaque champ surveillé. Picto ✎ ambre côté UI avec tooltip valeur d'origine.
 
+**Phase 3.5 ✓ — sécurité, auth utilisateur, mentions, devis initiaux, Vue Gantt (déployée 2026-04-29)**
+- **Audit sécurité pré-prod** (019) : 4 corrections — C1/C2 escalation horizontale via PATCH self-update sur `users.country/org_id/email` (un coproducer FR pouvait se mettre `country=CA`) ; H1 `uploaded_by` re-attribuable au UPDATE sur documents/producer_documents ; H2 colonnes audit spoofables au INSERT ; H3 `imported` réinitialisable pour casser la capture d'`imported_value`. Stratégie : triggers BEFORE INSERT/UPDATE qui forcent les valeurs autoritatives serveur.
+- **Auth utilisateur autonome** : page Login étendue avec mode « Mot de passe oublié » (envoi lien de récupération via Supabase). Page `/reset-password` dédiée gère le token recovery. Section « Changer mon mot de passe » dans Paramètres (visible à tous, pas seulement admin). Bouton « Envoyer l'invitation » sur les cards membres dans Équipe (admin) — utilise `inviteUserByEmail`. Templates Supabase email français personnalisés (Reset, Magic Link, Confirm, Invite, Email change). Décision : on reste sur SMTP intégré Supabase (~2-4 emails/h) + envoi par batch de 2 plutôt que Resend.
+- **Devis initiaux** (020-021) : nouveau dossier sous Espace Producteurs → Budget (3ᵉ folder dans `producer_documents` après assurances/legal). Colonne `version_devis` text nullable (convention UI : visible quand folder=devis_initiaux). Trigger d'audit étendu pour surveiller `version_devis`. Page `/espace-producteurs/devis-initiaux` + entrée sidebar.
+- **Mentions @ commentaires** (023) : colonne `comments.addressed_to` (FK users, nullable, ON DELETE SET NULL). Dropdown « À l'attention de » à côté de la zone de saisie. Pas de notification email (Phase 4). Affichage : « @Marie » en badge bleu dans le commentaire.
+- **Bloc Global Dashboard** (U1) : carte « Global » placée en 1ʳᵉ position de la rangée Tableaux, agrège l'état d'ensemble du projet (somme jalons + livrables, retards, validations en attente). Lecture seule, lien vers /production.
+- **Producteur·rice (rename)** : Coproducteur → Producteur·rice partout dans l'UI, inclus dans tous les badges et libellés. DB inchangée (toujours `coproducer` côté `access_level`).
+- **Discord branché** (a5a4ff7) : `DISCORD_URL` dans Sidebar.jsx pointe le canal SILA réel (`https://discord.com/channels/1389979512040853578/1468900940601102357`).
+- **Restore milestone title** (022) : retour Virginie — un titre de jalon importé (`77...0101`) avait été modifié par erreur pendant les tests. Restauré via `session_replication_role=replica` pour éviter de pourrir `imported_value` avec la mauvaise valeur d'origine.
+- **Vue Gantt par bailleur** (024 + composant) : `milestones.funder_id` (FK funders, nullable, ON DELETE SET NULL) — les 16 jalons existants restent NULL (« Production interne »), pas de backfill. Trigger d'audit étendu pour surveiller `funder_id`. Sélect Bailleur ajouté dans NewMilestoneModal et EditMilestoneModal. Composant `GanttView` (lecture seule) sous la timeline du Calendrier : swimlanes par bailleur + Production interne, palette éditoriale chaude par UUID (rouge SODEC, vert CNC, bleu FilmFund LU, ocre Pictanovo, prune SUD PACA, olive Montpellier, taupe interne), légende cliquable filtrante, ligne « aujourd'hui » rouge. Mobile : message ≥ 768 px (timeline verticale reste utilisable). Clic milestone → MilestoneDetailModal · clic livrable → EditDeliverableModal.
+- **Guide v3** (`Guide_Outil_Sila_v3.docx`) : refonte v2→v3 avec nouvelles sections (Mot de passe oublié, Changer son mot de passe, Inviter un membre, Adresser un commentaire à quelqu'un), Bloc Global Dashboard, Devis initiaux dans Espace Producteurs, statut éditable inline pour les Documents, notes visibles pour les Livrables, et renommage global Coproducteur → Producteur·rice. Backup v2 conservé en local.
+
+**Phase 3.6 ✓ — batch 12 modifs Virginie : archivage, palette pays, slide-overs, recherche (déployée 2026-05-01)**
+- **Archivage des jalons** (025) : `milestones.archived` (bool NOT NULL) + `archived_at` + `archived_by` (FK users) + trigger autoritatif BEFORE INSERT/UPDATE qui force timestamps côté serveur (pattern 019). Case à cocher discrète sur chaque jalon (timeline + colonne label Gantt). Cochée = bascule dans la section Archive ; décochée = retour parmi les actifs.
+- **Calendrier inversé** : Vue Gantt EN HAUT (entrée principale), Timeline mensuelle en bas. Toggles « Masquer/Afficher » indépendants sur les deux. Headers de mois cliquables (chevron ▾/▸), repli local non persisté. Section repliable « Archive (X jalons) » en bas de la timeline (opacity réduite, badge « Archivé »). Filtres pays/type/lot s'appliquent aussi à l'archive.
+- **Gantt — palette par pays** : les jalons « Production interne » héritent de la couleur de leur pays au lieu d'un taupe générique. CA = `#7a1726` (bordeaux foncé, distinct du SODEC `#a8243a`), FR = `#002654` (bleu marine), LU = `#00a4d6` (bleu clair). 3 swimlanes internes (CA → FR → LU) **toujours présentes** même vides — Virginie veut voir la structure permanente des 3 pays. Lane vide affiche « Aucun jalon » en italique gris. Bailleurs : comportement inchangé, A→Z en dessous des internes.
+- **Livrables — hiérarchie par pays** : 3 sections de niveau 1 (Canada / France / Luxembourg) avec compteurs « X bailleurs · Y livrables ». Bouton « Détails » discret à droite du nom du bailleur ouvre `FunderDetailPanel` (slide-over). Section repliable « Archive » en bas pour les bailleurs archivés.
+- **Slide-over bailleur** : édition complète admin (name, country, amount, currency, status, beneficiary_org_id, notes — colonne ajoutée en 026), lecture seule pour les autres rôles. Bouton Archiver/Désarchiver. Liste des livrables avec threads commentaires (badges + expansion inline).
+- **Archivage FFL Dév** (026) : `funders.archived` (bool NOT NULL) + `funders.notes` (text). Décision Virginie option C : DELETE du livrable « FilmFund Dév. — note d'intention » (statut `submitted` au moment de la décision, plus d'objet) + UPDATE FFL Dév archived=true. Pas de timestamp/FK auteur (acte rare, admin-only en pratique).
+- **Recherche Documents cross-folders** : bouton « 🔍 Rechercher » à gauche de « + Nouveau document » (vues niveau 1 et 2). Slide-over avec champ texte autoFocus debounced 300ms (title.ilike + version.eq quand la query ressemble à un numéro via regex `^v?(\d+)$`). 5 filtres : Sous-dossier, Tableau, Catégorie, Statut, Pays. NE recherche PAS dans Espace Producteurs (table `producer_documents` séparée + RLS). Clic sur résultat → EditDocumentModal.
+- **Composants partagés** : `SlideOver` (wrapper réutilisable panneau droit, backdrop, ESC, scroll body verrouillé) — utilisé par `FunderDetailPanel` et `DocumentSearchPanel`. `ArchiveCheckbox` mutualisé timeline + Gantt. `TimelineItem` extrait pour réutiliser dans `ArchiveSection` (mode `dimmed`).
+- **Fix Dashboard archivage** (commit `f621c0f`) : un jalon archivé continuait d'apparaître dans « Attention requise » et « Prochaines échéances ». Filtre `.eq('archived', false)` ajouté sur les requêtes milestones de `AttentionBlock`, `UpcomingDeliverablesBlock`, et sur l'embed `milestones.archived` du `LotsBlock` (PostgREST filtre la ressource embarquée sans inner-join). `RecentActivityBlock` non touché — entrées non cliquables, historique conservé.
+
 **Migrations**
 - 001 — schéma initial (11 tables, RLS, helpers SECURITY DEFINER)
 - 002 — `project_settings` (taux change) + RLS budget_lines élargie pour coproducer
@@ -60,6 +83,14 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - 016 — ajout catégorie `'reference'` dans documents.category CHECK
 - 017 — audit RLS holistique sur 7 tables (admin escape sur lots/tasks/documents/producer_documents, production_manager réintégré sur deliverables/funders/milestones)
 - 018 — colonnes audit `imported` / `imported_value` / `last_modified_by/at` sur 5 tables + trigger générique `track_imported_changes` + backfill 16 jalons + 19 budget JAXA + 22 sources
+- 019 — security hardening pré-prod (4 corrections : self-update country/org_id/email, uploaded_by figé au UPDATE, audit fields figés au INSERT, imported figé au UPDATE)
+- 020 — `producer_documents.folder` étendu à 'devis_initiaux' (3ᵉ valeur après assurances/legal) + colonne `version_devis` text nullable
+- 021 — trigger `track_imported_changes` étendu pour surveiller `producer_documents.version_devis`
+- 022 — restore titre jalon `77...0101` (« Préparation moodboard, DA et storyboard ») écrasé par erreur pendant les tests d'édition, via `session_replication_role=replica`
+- 023 — `comments.addressed_to` (FK users, nullable, ON DELETE SET NULL) — mentions @user
+- 024 — `milestones.funder_id` (FK funders, nullable, ON DELETE SET NULL) + index + trigger `track_imported_changes` étendu pour surveiller funder_id (aucun backfill — les 16 jalons existants restent NULL = « Production interne »)
+- 025 — `milestones.archived` (bool NOT NULL default false) + `archived_at` + `archived_by` (FK users) + index `(project_id, archived)` + trigger autoritatif BEFORE INSERT/UPDATE qui force timestamps côté serveur (pattern 019). Pas d'ajout aux watched_fields de track_imported_changes — l'archivage est opérationnel, pas éditorial.
+- 026 — `funders.archived` (bool NOT NULL default false) + `funders.notes` (text nullable) + index `(project_id, archived)` + DELETE du livrable « FilmFund Dév. — note d'intention » (id 0003) + UPDATE FFL Dév archived=true (décision Virginie option C)
 
 **Hosting**
 - Auto-deploy GitHub → Netlify activé depuis 2026-04-28 (lien repo dans Netlify dashboard, branche `main`, ~12s de build par push)
@@ -69,24 +100,27 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - Fond crème vintage `#f1e2bc` avec grain SVG (`feTurbulence baseFrequency=0.7`, brun à 28% d'alpha)
 - Footer "Propulsé par Studio Micho · Jaxa" sur toutes les pages protégées
 - Sidebar nav principale : Dashboard / Calendrier / Tableaux / Documents / Livrables / Équipe — Budget retiré
-- Sidebar Espace Producteurs (visible si `has_producer_access`) : Assurances / Légal / Budget — avec icône cadenas
+- Sidebar Espace Producteurs (visible si `has_producer_access`) : Assurances / Légal / Devis initiaux / Budget — avec icône cadenas
 
 **Données**
 - Tous les emails sont les vrais à présent : `virginiejaffredo@jaxa.ca`, `pierre.michaud@jaxa.ca`, `mrozieres@dark-euphoria.com`, `marie@dark-euphoria.com`, `wboard@dark-euphoria.com`, `helenewalland@gmail.com`, `millerannelise@gmail.com`, `raphael@voulez-vous.studio`, `antoine@freelance.example`, `aude@guivar.ch`, `jeremy@neek.studio`, `louis@neek.studio`. Antoine reste en placeholder le temps que Virginie nous donne son vrai email.
 
 **Phase 4 — non planifiée, non chiffrée**
-- Notifications email Resend (rappels échéances, validations en attente, nouveaux commentaires, changements de taux)
+- Notifications email Resend (rappels échéances, validations en attente, nouveaux commentaires, changements de taux, **mention dans un commentaire** depuis 023). SMTP intégré Supabase fonctionne actuellement mais limité à ~2-4 emails/h ; à reconsidérer si volume monte.
 - Exports PDF (état d'avancement par bailleur, mise en page propre pour SODEC/CNC)
 - Génération assistée de rapports avec IA
-- Page Paramètres : config Discord URL, gestion équipe depuis l'UI (créer un user sans passer par migration SQL), catégories documents personnalisables
-- Module commentaires : mentions @user, édition de commentaire, threads imbriqués
-- Édition d'un funder (bailleur lui-même) — actuellement read-only dans la card Livrables
-- Code splitting `React.lazy()` sur Budget et Calendrier (bundle à 622 KB, au-delà du seuil Vite 500 KB)
+- Page Paramètres : gestion équipe depuis l'UI (créer un user sans passer par migration SQL), catégories documents personnalisables
+- Module commentaires : édition de commentaire, threads imbriqués (mentions @user fait en 023)
+- Code splitting `React.lazy()` sur Budget et Calendrier (bundle à 675 KB après 3.6, au-delà du seuil Vite 500 KB — devient pressant)
+- Vue Gantt — zoom (compact/standard/wide), regroupement FilmFund Dév+Prod en swimlane unique, sticky header timeline, export image
 - Migration éventuelle pour lier lots ↔ milestones et deliverables ↔ documents (jonctions toujours absentes)
+- Recherche Documents : ajout `notes` à la table `documents` si Virginie veut chercher dans les notes (actuellement title + version seulement). Étendre éventuellement à `producer_documents` avec gating `has_producer_access`.
+- Activity log d'archivage : extension du trigger `milestones_log_activity` pour logguer les flips `archived` (actuellement filtre sur title/date). Optionnel — à voir si Virginie veut suivre les archivages dans le journal.
 
 **Documentation client**
-- `Guide_Outil_Sila_v2.docx` (~22 pages, palette navy/accent, refonte complète 2026-04-28) — guide d'accompagnement non committé, à transmettre par courriel
+- `Guide_Outil_Sila_v3.docx` (~50 KB, 299 paragraphes, 13 tableaux, refonte 2026-04-29) — guide d'accompagnement non committé (gitignored), à transmettre à Virginie par courriel. Inclut auth flow utilisateur, Bloc Global Dashboard, Devis initiaux, mentions @, Producteur·rice. v2 conservée localement comme référence.
 - `docs/credentials_initiales_2026-04.md` — identifiants initiaux des 3 nouveaux contributeurs (Aude, Jérémy, Louis), gitignored, à transmettre à Virginie qui les distribuera
+- `docs/email_templates.md` — 5 templates Supabase email français personnalisés (Reset, Magic Link, Confirm Signup, Email change, Invite User), appliqués en prod le 2026-04-29
 
 **Journal complet :** voir [WORKING_LOG.md](WORKING_LOG.md).
 
@@ -164,13 +198,13 @@ id (uuid PK), project_id (FK), lot_id (FK, nullable), uploaded_by (FK user), tit
 id (uuid PK), project_id (FK), lot_id (FK, nullable), org_id (FK), funder_id (FK, nullable), code (text, nullable), category, planned (decimal), actual (decimal), currency, cost_origin (interne|apparente|externe, nullable), exchange_rate (decimal, nullable) + colonnes audit
 
 ### funders
-id (uuid PK), project_id (FK), name, country, amount (decimal), currency, status (acquired|expected|to_confirm)
+id (uuid PK), project_id (FK), name, country, amount (decimal), currency, status (acquired|expected|to_confirm), archived (bool, depuis 026), notes (text, depuis 026)
 
 ### deliverables
 id (uuid PK), funder_id (FK), title, due_date, status (to_produce|in_progress|submitted|validated), notes
 
 ### milestones (depuis 003)
-id (uuid PK), project_id (FK), lot_id (FK, nullable), title, start_date, end_date (nullable — NULL = jalon ponctuel), type (depot_fonds|festival|premiere|jalon_production), country, notes, created_by (FK user), created_at + colonnes audit
+id (uuid PK), project_id (FK), lot_id (FK, nullable), funder_id (FK funders, nullable, depuis 024), title, start_date, end_date (nullable — NULL = jalon ponctuel), type (depot_fonds|festival|premiere|jalon_production), country, notes, archived (bool default false, depuis 025), archived_at (timestamptz, depuis 025), archived_by (FK users, depuis 025), created_by (FK user), created_at + colonnes audit
 
 ### project_settings (depuis 002)
 project_id (uuid PK), exchange_rate_eur_to_cad (decimal), exchange_rate_cad_to_eur (decimal — depuis 013, indépendant), exchange_rate_date (date)
