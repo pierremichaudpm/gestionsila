@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthProvider.jsx'
 import { relativeTime } from '../../lib/format'
@@ -21,6 +21,12 @@ export default function CommentThread({ projectId, entityType, entityId, onCount
   const [addressedTo, setAddressedTo] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [actionError, setActionError] = useState(null)
+
+  // Ref pour éviter que la prop onCountChange (souvent recréée à chaque render
+  // par les parents via () => setCommentBump(...)) ne fasse retourner l'effect
+  // de chargement et clignoter la liste après un insert.
+  const onCountChangeRef = useRef(onCountChange)
+  useEffect(() => { onCountChangeRef.current = onCountChange }, [onCountChange])
 
   useEffect(() => {
     if (!projectId || !entityType || !entityId) return
@@ -59,12 +65,12 @@ export default function CommentThread({ projectId, entityType, entityId, onCount
         .sort((a, b) => (a.full_name ?? '').localeCompare(b.full_name ?? ''))
       setMembers(memberList)
       setLoading(false)
-      onCountChange?.((commentsRes.data ?? []).length)
+      onCountChangeRef.current?.((commentsRes.data ?? []).length)
     }
 
     load()
     return () => { alive = false }
-  }, [projectId, entityType, entityId, onCountChange])
+  }, [projectId, entityType, entityId])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -94,7 +100,7 @@ export default function CommentThread({ projectId, entityType, entityId, onCount
     setComments(next)
     setDraft('')
     setAddressedTo('')
-    onCountChange?.(next.length)
+    onCountChangeRef.current?.(next.length)
   }
 
   async function handleDelete(id) {
@@ -106,7 +112,7 @@ export default function CommentThread({ projectId, entityType, entityId, onCount
     }
     const next = comments.filter(c => c.id !== id)
     setComments(next)
-    onCountChange?.(next.length)
+    onCountChangeRef.current?.(next.length)
   }
 
   return (
