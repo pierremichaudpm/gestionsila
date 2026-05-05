@@ -22,10 +22,11 @@ export default function MilestoneDetailModal({
   const type = milestoneType(milestone.type)
   const lot = milestone.lot_id ? (lots ?? []).find(l => l.id === milestone.lot_id) : null
 
-  // Permission édition : admin partout, coproducer ou production_manager
-  // pour leur pays uniquement (alignée sur la RLS milestones après 017).
+  // Permission édition : admin partout, coproducer / production_manager /
+  // partner pour leur pays uniquement (alignée sur is_project_writer côté
+  // RLS depuis 027).
   const canEdit = accessLevel === 'admin'
-    || ((accessLevel === 'coproducer' || accessLevel === 'production_manager')
+    || (['coproducer', 'production_manager', 'partner'].includes(accessLevel)
         && profile?.country === milestone.country)
 
   return (

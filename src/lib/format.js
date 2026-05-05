@@ -40,6 +40,7 @@ const ACCESS_LEVEL = {
   admin:              { label: 'Admin',                  tone: 'ok' },
   coproducer:         { label: 'Producteur·rice',        tone: 'warn' },
   production_manager: { label: 'Chargé·e production',    tone: 'warn' },
+  partner:            { label: 'Partenaire',             tone: 'partner' },
   contractor:         { label: 'Prestataire',            tone: 'neutral' },
 }
 
@@ -68,6 +69,7 @@ const TONE_CLASSES = {
   warn:    'bg-amber-50 text-amber-700',
   ok:      'bg-emerald-50 text-emerald-700',
   late:    'bg-red-50 text-red-700',
+  partner: 'bg-indigo-50 text-indigo-700',
 }
 
 const MILESTONE_TYPE = {

@@ -498,7 +498,7 @@ function DocumentRow({ doc, profile, accessLevel, onAction, onEdit, commentCount
   const isMyCountry = profile?.country === doc.country
   const isAdmin = accessLevel === 'admin'
   const isApprover = accessLevel === 'admin' || accessLevel === 'coproducer'
-  const canEdit = isAdmin || (accessLevel === 'coproducer' && isMyCountry) || (accessLevel === 'production_manager' && isMyCountry)
+  const canEdit = isAdmin || (['coproducer', 'production_manager', 'partner'].includes(accessLevel) && isMyCountry)
 
   let action = null
   if (doc.validation_status === 'draft' && isMyCountry) {
