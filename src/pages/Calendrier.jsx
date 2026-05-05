@@ -41,7 +41,11 @@ export default function Calendrier() {
   const [commentBump, setCommentBump] = useState(0)
   const [showGantt, setShowGantt] = useState(true)
 
-  const canCreate = accessLevel === 'admin' || accessLevel === 'coproducer'
+  // Création de jalons : admin partout, coproducer/production_manager/partner
+  // sur leur pays (RLS milestones_insert via is_project_writer depuis 027).
+  // Le pays est figé sur celui de l'utilisateur côté NewMilestoneModal pour
+  // les rôles non-admin.
+  const canCreate = ['admin', 'coproducer', 'production_manager', 'partner'].includes(accessLevel)
 
   useEffect(() => {
     if (!projectId) return

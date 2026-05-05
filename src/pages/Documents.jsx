@@ -28,6 +28,18 @@ import { useCommentCounts } from '../components/comments/useCommentCounts.js'
 const PAGE_SIZE = 25
 const VALID_FOLDERS = new Set(DOCUMENT_FOLDER_OPTIONS)
 
+// Garde anti-dégât (cf. migration 029) : production_manager / partner ne
+// peuvent supprimer que leurs propres uploads. Admin partout, coproducer
+// sur son pays, contractor jamais.
+function canDeleteDocument(doc, accessLevel, profile) {
+  if (!doc || !profile) return false
+  if (accessLevel === 'admin') return true
+  const isMyCountry = profile.country === doc.country
+  if (accessLevel === 'coproducer' && isMyCountry) return true
+  if (['production_manager', 'partner'].includes(accessLevel) && isMyCountry && doc.uploaded_by === profile.id) return true
+  return false
+}
+
 export default function Documents() {
   const params = useParams()
   const navigate = useNavigate()
@@ -259,6 +271,7 @@ export default function Documents() {
         doc={editingDoc}
         lots={lots}
         accessLevel={accessLevel}
+        canDelete={canDeleteDocument(editingDoc, accessLevel, profile)}
         onClose={() => setEditingDoc(null)}
         onSaved={() => { setEditingDoc(null); setReloadKey(k => k + 1) }}
         onDeleted={() => { setEditingDoc(null); setReloadKey(k => k + 1) }}
