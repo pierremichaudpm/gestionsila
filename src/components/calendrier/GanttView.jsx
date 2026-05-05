@@ -159,12 +159,12 @@ export default function GanttView({
       </div>
 
       {/* Cadre Gantt */}
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-[#fbf7ef] shadow-sm">
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-[color:var(--gantt-bg)] shadow-sm">
         <div style={{ minWidth: LABEL_W + scaleWidth }}>
           {/* Header timeline */}
-          <div className="flex border-b border-slate-200 bg-[#fbf7ef]">
+          <div className="flex border-b border-slate-200 bg-[color:var(--gantt-bg)]">
             <div
-              className="flex shrink-0 items-center bg-[#ebe4d2] px-4 text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500"
+              className="flex shrink-0 items-center bg-[color:var(--gantt-header)] px-4 text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500"
               style={{ width: LABEL_W }}
             >
               Bailleurs / Livrables
@@ -268,7 +268,7 @@ function Swimlane({ lane, rangeStart, scaleWidth, onMilestoneClick, onDeliverabl
   return (
     <div className="border-b border-slate-200 last:border-b-0">
       {/* Header swimlane */}
-      <div className="flex" style={{ height: LANE_HEADER_H, background: '#ebe4d2' }}>
+      <div className="flex" style={{ height: LANE_HEADER_H, background: 'var(--gantt-header)' }}>
         <div
           className="flex shrink-0 items-center gap-2 border-r border-slate-200 px-4"
           style={{ width: LABEL_W }}

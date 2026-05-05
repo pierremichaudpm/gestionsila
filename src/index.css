@@ -14,6 +14,28 @@
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
 
+/* ─── Light scheme tokens (default) ────────────────────────────────── */
+:root {
+  color-scheme: light;
+  --gantt-bg: #fbf7ef;
+  --gantt-header: #ebe4d2;
+}
+
+/* ─── Dark scheme — auto via prefers-color-scheme ──────────────────── */
+/* On override les tokens @theme depuis :root, ce qui se propage à toutes
+   les utilities Tailwind qui les consomment (bg-surface, etc.) ainsi
+   qu'aux composants qui lisent var(--color-surface) directement. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-surface: #14171c;
+    --color-text-primary: #e6e8eb;
+    --color-text-secondary: #9ca3af;
+    --gantt-bg: #1a1f27;
+    --gantt-header: #232830;
+  }
+}
+
 html, body, #root {
   height: 100%;
 }
@@ -27,4 +49,118 @@ body {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.3 0 0 0 0 0.2 0 0 0 0 0.1 0 0 0 0.28 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   background-repeat: repeat;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Pas de grain SVG en dark mode (le grain brun/rouge devient sale sur fond
+   sombre — fond plat plus propre). */
+@media (prefers-color-scheme: dark) {
+  body {
+    background-image: none;
+  }
+}
+
+/* ─── Compat shim — dark mode overrides pour les utilities Tailwind les
+   plus utilisées dans l'app (audit : bg-white 92×, text-slate-500 129×,
+   border-slate-200/300 122×, badges bg-{color}-50/text-{color}-700, etc.).
+   Permet de couvrir l'app en dark sans toucher chaque composant. À migrer
+   éventuellement vers des tokens sémantiques (--bg-elevated, --text-primary)
+   si on stabilise une vraie design system. ──────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  /* Surfaces */
+  .bg-white       { background-color: #1c2128; }
+  .bg-slate-50    { background-color: #181c23; }
+  .bg-slate-100   { background-color: #232831; }
+  .bg-slate-200   { background-color: #2a303a; }
+  .bg-slate-800   { background-color: #2f3540; }
+  .bg-slate-900   { background-color: #1a1e25; }
+
+  /* Texte */
+  .text-slate-900 { color: #e9ecef; }
+  .text-slate-800 { color: #d8dce1; }
+  .text-slate-700 { color: #c4c8cd; }
+  .text-slate-600 { color: #a1a6ac; }
+  .text-slate-500 { color: #8a8f96; }
+  .text-slate-400 { color: #6c7178; }
+  /* slate-200 / slate-300 conservés (utilisés dans la sidebar navy comme
+     texte clair sur fond sombre — leur valeur claire reste correcte). */
+
+  /* Borders */
+  .border-slate-100 { border-color: #232831; }
+  .border-slate-200 { border-color: #2c3239; }
+  .border-slate-300 { border-color: #393f47; }
+  .border-slate-800 { border-color: #2f3540; }
+
+  /* Marque — brand-navy reste tel quel (sidebar ok) ; brand-blue tient en
+     dark sans être recalibré. text-brand-navy comme accent sur fond clair
+     devient illisible en dark, on le remplace par un bleu plus clair. */
+  .text-brand-navy { color: #6e9bc8; }
+
+  /* Status & catégories — backgrounds pastel deviennent fonds teintés
+     sombres, textes -700 deviennent versions claires de la même teinte. */
+  .bg-red-50      { background-color: #2a1517; }
+  .bg-emerald-50  { background-color: #0f2620; }
+  .bg-amber-50    { background-color: #2a1f0a; }
+  .bg-blue-50     { background-color: #0f1f2c; }
+  .bg-violet-50   { background-color: #1d1530; }
+  .bg-fuchsia-50  { background-color: #2a1024; }
+  .bg-teal-50     { background-color: #0a2622; }
+  .bg-orange-50   { background-color: #2a180a; }
+  .bg-cyan-50     { background-color: #0a242a; }
+
+  .text-red-700      { color: #fca5a8; }
+  .text-emerald-700  { color: #6ed1a8; }
+  .text-amber-700    { color: #f4c47a; }
+  .text-blue-700     { color: #87b8e8; }
+  .text-violet-700   { color: #b89df0; }
+  .text-fuchsia-700  { color: #e094d8; }
+  .text-teal-700     { color: #5fcfb8; }
+  .text-orange-700   { color: #f4a665; }
+  .text-cyan-700     { color: #5cc4d8; }
+
+  /* Variantes -800 / -900 (titres ou textes plus appuyés sur fonds pastel) :
+     mêmes teintes claires, légèrement plus saturées. */
+  .text-red-800     { color: #fdb8ba; }
+  .text-emerald-800 { color: #82dab5; }
+  .text-amber-800   { color: #f6cf8b; }
+  .text-amber-900   { color: #f8d99c; }
+
+  .text-red-600    { color: #fb7575; }
+  .text-red-500    { color: #f86464; }
+  .text-amber-600  { color: #e8b157; }
+
+  /* Bordures -200 pour les blocs d'alerte / statut. */
+  .border-red-200      { border-color: #5a2128; }
+  .border-amber-200    { border-color: #4a3a16; }
+  .border-emerald-200  { border-color: #1f4a3d; }
+  .border-slate-500    { border-color: #4a5159; }
+
+  /* Ombres — invisibles sur fond sombre, on monte l'opacité. */
+  .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.4); }
+}
+
+/* ─── Print : forcer le rendu clair ────────────────────────────────── */
+/* Un export sombre est illisible imprimé. On force tous les overrides
+   dark à revenir aux valeurs claires, peu importe la préférence OS. */
+@media print {
+  :root {
+    color-scheme: light !important;
+    --color-surface: #ffffff !important;
+    --color-text-primary: #111111 !important;
+    --gantt-bg: #fbf7ef !important;
+    --gantt-header: #ebe4d2 !important;
+  }
+  body {
+    background-color: white !important;
+    background-image: none !important;
+    color: #111 !important;
+  }
+  .bg-white       { background-color: #ffffff !important; }
+  .bg-slate-50    { background-color: #f8fafc !important; }
+  .bg-slate-100   { background-color: #f1f5f9 !important; }
+  .text-slate-900 { color: #0f172a !important; }
+  .text-slate-800 { color: #1e293b !important; }
+  .text-slate-700 { color: #334155 !important; }
+  .text-slate-600 { color: #475569 !important; }
+  .text-slate-500 { color: #64748b !important; }
+  .text-slate-400 { color: #94a3b8 !important; }
 }
