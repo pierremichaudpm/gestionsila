@@ -25,6 +25,18 @@ import { useCommentCounts } from '../components/comments/useCommentCounts.js'
 
 const VALID_FOLDERS = new Set(PRODUCER_FOLDER_OPTIONS)
 
+// Cf. canDeleteDocument dans pages/Documents.jsx — même logique appliquée à
+// producer_documents (migration 029). production_manager / partner avec
+// has_producer_access=true ne peuvent supprimer que leurs propres uploads.
+function canDeleteProducerDocument(doc, accessLevel, profile) {
+  if (!doc || !profile) return false
+  if (accessLevel === 'admin') return true
+  const isMyCountry = profile.country === doc.country
+  if (accessLevel === 'coproducer' && isMyCountry) return true
+  if (['production_manager', 'partner'].includes(accessLevel) && isMyCountry && doc.uploaded_by === profile.id) return true
+  return false
+}
+
 export default function ProducerDocuments() {
   const params = useParams()
   const { projectId, accessLevel, hasProducerAccess, loading: projectLoading } = useCurrentProject()
@@ -219,6 +231,7 @@ export default function ProducerDocuments() {
         doc={editingDoc}
         lots={lots}
         accessLevel={accessLevel}
+        canDelete={canDeleteProducerDocument(editingDoc, accessLevel, profile)}
         onClose={() => setEditingDoc(null)}
         onSaved={() => { setEditingDoc(null); setReloadKey(k => k + 1) }}
         onDeleted={() => { setEditingDoc(null); setReloadKey(k => k + 1) }}

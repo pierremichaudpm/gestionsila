@@ -14,7 +14,7 @@ import Modal from '../ui/Modal.jsx'
 // Édition d'un document confidentiel (producer_documents). Mêmes champs que
 // EditDocumentModal mais sans la catégorie : producer_documents n'a que
 // les sous-dossiers assurances / legal.
-export default function EditProducerDocumentModal({ open, onClose, doc, lots, accessLevel, onSaved, onDeleted }) {
+export default function EditProducerDocumentModal({ open, onClose, doc, lots, accessLevel, onSaved, onDeleted, canDelete = true }) {
   const isAdmin = accessLevel === 'admin'
   const [form, setForm] = useState(buildForm(doc))
   const [submitting, setSubmitting] = useState(false)
@@ -193,14 +193,16 @@ export default function EditProducerDocumentModal({ open, onClose, doc, lots, ac
         ) : null}
 
         <div className="flex items-center justify-between gap-2 pt-2">
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={submitting}
-            className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
-          >
-            Supprimer
-          </button>
+          {canDelete ? (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={submitting}
+              className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+            >
+              Supprimer
+            </button>
+          ) : <span />}
           <div className="flex gap-2">
             <button
               type="button"

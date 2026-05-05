@@ -14,10 +14,16 @@ import {
 import Modal from '../ui/Modal.jsx'
 
 // Édition d'un document existant. Permission : RLS gère côté serveur (admin
-// partout, coproducer/production_manager pour leur pays). Pour le pays, le
-// select est ouvert seulement si admin (sinon on voit le pays mais on ne peut
-// pas le changer).
-export default function EditDocumentModal({ open, onClose, doc, lots, accessLevel, onSaved, onDeleted }) {
+// partout, coproducer/production_manager/partner pour leur pays). Pour le
+// pays, le select est ouvert seulement si admin (sinon on voit le pays mais
+// on ne peut pas le changer).
+//
+// Le bouton Supprimer suit la nuance de 029 : production_manager / partner
+// ne peuvent supprimer que leurs propres uploads. Le parent passe canDelete
+// (false par défaut conservateur — si non passé, bouton caché). Si canDelete
+// n'est pas passé du tout, on présume true (compat — les anciens callers
+// admin/coproducer n'avaient pas de restriction).
+export default function EditDocumentModal({ open, onClose, doc, lots, accessLevel, onSaved, onDeleted, canDelete = true }) {
   const isAdmin = accessLevel === 'admin'
   const [form, setForm] = useState(buildForm(doc))
   const [submitting, setSubmitting] = useState(false)
@@ -196,14 +202,16 @@ export default function EditDocumentModal({ open, onClose, doc, lots, accessLeve
         ) : null}
 
         <div className="flex items-center justify-between gap-2 pt-2">
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={submitting}
-            className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
-          >
-            Supprimer
-          </button>
+          {canDelete ? (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={submitting}
+              className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+            >
+              Supprimer
+            </button>
+          ) : <span />}
           <div className="flex gap-2">
             <button
               type="button"
