@@ -8,7 +8,7 @@ import {
 } from '../../lib/format'
 import Modal from '../ui/Modal.jsx'
 
-const ACCESS_LEVELS = ['admin', 'coproducer', 'production_manager', 'contractor']
+const ACCESS_LEVELS = ['admin', 'coproducer', 'production_manager', 'partner', 'contractor']
 
 // Édition d'un membre du projet. Trois modes :
 //  - self  : l'utilisateur édite son propre profil. full_name + role uniquement.
