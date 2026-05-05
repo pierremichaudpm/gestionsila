@@ -1,5 +1,65 @@
 # WORKING_LOG — Gestion SILA
 
+## Session 2026-05-05 — Phase 3.7 : dark mode + rôle Partenaire + helper RLS + auto-producer-access + delete scopé
+
+### Objectif
+Livrer en 4 PRs indépendantes (avec migrations atomiques) le batch d'ajustements demandés par Pierre via brief client : (1) dark mode auto OS, (2) nouveau rôle Partenaire avec mêmes droits que production_manager, (3) auto-cochage `has_producer_access` pour les coproducer/admin à la création, (4) production_manager doit pouvoir CRUD jalons côté UI et avoir une suppression docs limitée à ses propres uploads.
+
+### Ce qui a été fait
+
+#### PR 1 — Dark mode auto via prefers-color-scheme (commit `96a4f6e`, merge `986ac3c`)
+- Override des tokens `@theme` (`--color-surface`, `--color-text-primary`, `--gantt-bg`, `--gantt-header`) dans un block `@media (prefers-color-scheme: dark)` dans `src/index.css`. Tailwind v4 régénère les utilities consommatrices automatiquement.
+- Compat shim CSS pour ~30 classes Tailwind les plus utilisées dans l'app (audit ripgrep : bg-white 92×, text-slate-500 129×, border-slate-{200,300} 244×, etc.). Couvre l'app en dark sans toucher 50 composants. Migration future possible vers tokens sémantiques (`--bg-elevated`, `--text-primary`) si on veut nettoyer.
+- `@media print` force tous les overrides à revenir aux valeurs claires (un export sombre est illisible imprimé).
+- 2 micro-edits sur GanttView.jsx pour passer 2 hex frame (`#fbf7ef`, `#ebe4d2`) en CSS variables.
+- Bascule à chaud quand l'OS change de thème : zéro JS, juste le navigateur qui réagit aux media queries.
+- Indigo badge en dark mode (Partenaire) non calibré dans le shim — Tailwind defaults restent lisibles, on attend retour Virginie avant d'ajuster.
+
+#### PR 2 — Nouveau rôle partner (commit `50c9fc4`, merge `be6a6f6`)
+- **Migration 027** : access_level CHECK étendu pour accepter `'partner'` (constraint name `project_members_access_level_check` en convention Postgres, vérifiée à l'application). Helper SQL `is_project_writer(_project_id, _country)` factorise la logique writer dupliquée dans 21 policies depuis 017. 21 policies country-scoped re-écrites pour appeler le helper (lots, tasks, documents, producer_documents, funders, milestones, deliverables × 3 actions). `comments_insert` ajout `'partner'` inline (pattern différent — pas de country sur un commentaire).
+- Badge UI indigo distinct des autres rôles. Tailwind classes `bg-indigo-50 text-indigo-700` (passe AA en clair ; en dark, Tailwind defaults restent lisibles).
+- Sélectionnable dans EditMemberModal entre production_manager et contractor.
+- 3 checks frontend `canEdit` (Documents, ProducerDocuments, MilestoneDetailModal) incluent désormais `'partner'` aux côtés de production_manager.
+
+#### PR 3 — Auto-cochage has_producer_access (commit `0628731`, merge `a6fd248`)
+- **Migration 028** : trigger BEFORE INSERT sur project_members qui flippe `has_producer_access=true` quand `access_level IN ('admin', 'coproducer')` ET valeur entrante = false. Le `false` du DDL default est traité comme « pas d'opinion ». Admin/coproducer arrivent désormais avec accès producteurs activé par défaut.
+- Décision Pierre option (a) : on garde le flag indépendant du rôle. Mathieu reste à false (cas exceptionnel), pas de modification rétroactive.
+- Pas de réaction sur UPDATE de `access_level` — promotion contractor → coproducer ne flippe rien automatiquement, l'admin doit cocher manuellement (cohérent avec la philosophie : l'accès Espace Producteurs est une décision distincte du rôle).
+
+#### PR 4 — Jalons production_manager + suppression docs scopée (commit `038107a`, merge `35530d3`)
+- **Lacune découverte dans 027** : seules les policies WRITE avaient été migrées pour ajouter partner. Les policies SELECT (documents, tasks, producer_documents, funding_sources, budget_lines) gardaient des role lists inline sans `'partner'`. Conséquence : partner pouvait écrire mais pas lire — bug fonctionnel. Corrigé en 029 partie A.
+- **Migration 029 partie A** : ajout `'partner'` aux 5 policies SELECT manquantes.
+- **Migration 029 partie B** : DELETE resserré sur documents et producer_documents. Admin et coproducer inchangés. production_manager et partner ne peuvent supprimer QUE leurs propres uploads (country match AND `uploaded_by = auth.uid()`). UPDATE inchangé (édition incrémentale autorisée). Garde anti-dégât sur action irréversible.
+- **Calendrier `canCreate`** : étendu à production_manager + partner. La RLS `milestones_insert` via `is_project_writer` l'autorisait déjà côté serveur depuis 027, mais le bouton « + Jalon » était caché pour ces rôles dans l'UI. Bug pré-existant.
+- **EditDocumentModal et EditProducerDocumentModal** : nouveau prop `canDelete` (default true en compat). Si false, le bouton Supprimer est caché (rendered en `<span />` placeholder pour préserver le layout flex justify-between).
+- **Helpers `canDelete{Producer}Document`** : calcul d'éligibilité au niveau Documents.jsx / ProducerDocuments.jsx, passé à la modal. Logique : admin partout, coproducer pays match, production_manager/partner pays match + uploaded_by = profile.id.
+
+### Décisions techniques
+
+- **Dark mode = compat shim CSS plutôt que migration sémantique** : choix pragmatique de remplacer ~30 classes Tailwind les plus utilisées via `@media dark` dans index.css (au lieu de migrer toute l'app vers `bg-surface`, `text-primary` etc.). Bénéfice : zéro touche-à-tout sur 50 composants. Coût : ~80 lignes de surcharges CSS marquées comme « shim », à réécrire si on stabilise une vraie design system avec tokens sémantiques.
+- **Helper `is_project_writer` plutôt que duplication** : la logique writer apparaissait 21 fois dans 017 (admin escape OR (writer roles + country match)). Factoriser dans une fonction SECURITY DEFINER STABLE permet (a) ajouter un futur rôle en éditant la fonction, (b) lecture cognitive plus simple des policies. Coût : un appel de fonction par check RLS, négligeable vu que la fonction est déterministe et cachable côté planner Postgres.
+- **Partner = clone de production_manager côté droits** : pas de différenciation fonctionnelle. La distinction est purement UI (badge indigo) pour que Virginie distingue d'un coup d'œil un partenaire externe d'un chargé·e de projet interne. Si un futur besoin émerge (partner avec droits différents), on pourra forker `is_project_writer` en `is_country_writer` + `is_partner_writer`.
+- **Auto-cochage option (a) au lieu d'option (b)** : on garde le flag has_producer_access séparé du rôle plutôt que de le dériver implicitement (option b aurait simplifié le code mais retiré la granularité). Justification : Virginie veut pouvoir donner ou retirer l'accès finement (cas Mathieu coproducer sans accès), et le flag séparé documente l'intention même quand la valeur est false.
+- **DELETE asymétrique de UPDATE** : production_manager peut éditer toute fiche dans son pays mais ne peut supprimer que ses propres uploads. Cohérent avec l'asymétrie incrémental/final : éditer un titre est révocable (autre éditeur peut corriger), supprimer une fiche est définitif. Le brief Pierre demandait explicitement cette nuance.
+- **Migration 029 fait 2 choses** : la lacune SELECT (cleanup de 027) et le DELETE scopé (nouvelle feature). J'aurais pu force-pusher 027 pour ajouter le SELECT fix, mais ça aurait modifié un commit déjà reviewable côté PR. Préférence : 029 « cleanup + feature » avec le cleanup clairement labellé dans le commit message.
+- **Workflow déploiement** : 3 migrations appliquées sur prod (`qqyrqiqnvsvzxqqukcjv`) via `supabase db query --linked --file` (Management API, pas besoin de password DB) avec vérification post-application avant la suivante. BEGIN/COMMIT wrapper ajouté sur chaque fichier pour atomicité — si une migration ratait, rollback automatique. Puis 4 merges --no-ff sur main et push unique pour déclencher Netlify une seule fois.
+- **`supabase db query --linked` est la bonne voie pour appliquer du DDL en autonomie** : découverte de cette session. Le password DB n'est pas dans le `pooler-url`, j'avais cru ne pas pouvoir appliquer en autonomie. La CLI Supabase (déjà authentifiée + linkée au projet) permet de pousser du SQL via Management API. Les sorties de DDL sont silencieuses (pas d'erreur affichée = OK), vérification ensuite via SELECT pg_proc / pg_trigger / pg_policy. À retenir pour les futures sessions de migration — supersède la note du WORKING_LOG du 2026-05-01 sur le manque d'accès psql.
+
+### Problèmes rencontrés
+
+- **Lacune SELECT dans 027** : oubli d'auditer les policies SELECT (les listes de rôles inline) en plus des WRITE. Pris en flagrant délit pendant l'audit pour PR 4. Heureusement aucune migration n'avait été appliquée en prod à ce moment, j'ai pu corriger dans 029 partie A. Lesson : quand on ajoute un rôle, audit 360 (SELECT + INSERT + UPDATE + DELETE), pas juste les writers.
+- **Confusion brief « applique les migrations » vs « prépare le SQL »** : message N-1 disait méthode (c) copier-coller via SQL Editor, message N disait `applique les migrations` directement. J'ai vérifié les capacités (`supabase db query --linked` disponible) avant d'agir. Ai procédé avec verbose updates pour permettre interruption.
+- **Pooler-url Supabase ne contient pas le password** : `supabase/.temp/pooler-url` a juste l'utilisateur (`postgres.qqyrqiqnvsvzxqqukcjv@host:port`), pas de password. psql direct échoue avec « no password supplied ». La voie est `supabase db query --linked` (Management API). Documenté dans WORKING_LOG du 2026-05-01 le manque d'accès psql ; mise à jour ici : OK pour DDL sans password via la CLI.
+- **Indigo badge en dark mode** : pas calibré dans le shim CSS de PR 1 (les overrides indigo ne sont pas dans le shim). Tailwind defaults restent lisibles (`bg-indigo-50` = `#eef2ff` sur fond sombre — pastel un peu voyant). Décision : on attend le retour de Virginie. Si elle dit rien, on ne touche pas.
+
+### Prochaines étapes
+
+1. **Retour Virginie sur dark mode** — surface très visible. Vérifier qu'aucun élément ne devient illisible (modals, dropdowns, badges, hover states). Ajuster le shim CSS si elle remonte des cas que l'audit a manqués.
+2. **Retour Virginie sur badge Partenaire** — indigo en clair va, en dark à confirmer. 1-line edit dans index.css si elle le trouve trop voyant.
+3. **Tester création d'un membre partner** — pas de membre seedé pour l'instant. Au prochain ajout (via Equipe ou direct DB), vérifier que le badge s'affiche, que CRUD fonctionne, que delete docs est bien limité aux uploads propres.
+4. **Code splitting Vite** devient encore plus pressant — 677 KB après 3.7. Déjà priorisé en Phase 4.
+5. **Mettre à jour le guide client v3 si Virginie le demande** — Phase 3.7 est principalement plumbing (rôle, RLS, dark mode auto). Le seul flux UI nouveau pour Virginie : ajouter un membre Partenaire + retrait du bouton Supprimer pour un chargé·e de production sur des docs uploadés par d'autres. Une note d'1 paragraphe suffirait.
+
 ## Session 2026-05-01 — Phase 3.6 : batch 12 modifs Virginie (4 sections + 2 fixes)
 
 ### Objectif

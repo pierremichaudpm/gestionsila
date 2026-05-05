@@ -8,7 +8,7 @@ Outil de gestion de production pour coproductions internationales. Première ins
 **Budget Phase 1 :** 3 500 $ CAD
 **Deadline :** Opérationnel mi-mai 2026
 
-## État d'avancement (2026-05-01)
+## État d'avancement (2026-05-05)
 
 **Phase 1 ✓ — déployée en prod : [https://gestion-sila.netlify.app](https://gestion-sila.netlify.app)**
 - Auth flow complet : AuthProvider context, ProtectedRoute, page Login, profil + logout dans la sidebar
@@ -64,6 +64,16 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - **Composants partagés** : `SlideOver` (wrapper réutilisable panneau droit, backdrop, ESC, scroll body verrouillé) — utilisé par `FunderDetailPanel` et `DocumentSearchPanel`. `ArchiveCheckbox` mutualisé timeline + Gantt. `TimelineItem` extrait pour réutiliser dans `ArchiveSection` (mode `dimmed`).
 - **Fix Dashboard archivage** (commit `f621c0f`) : un jalon archivé continuait d'apparaître dans « Attention requise » et « Prochaines échéances ». Filtre `.eq('archived', false)` ajouté sur les requêtes milestones de `AttentionBlock`, `UpcomingDeliverablesBlock`, et sur l'embed `milestones.archived` du `LotsBlock` (PostgREST filtre la ressource embarquée sans inner-join). `RecentActivityBlock` non touché — entrées non cliquables, historique conservé.
 
+**Phase 3.7 ✓ — Dark mode + nouveau rôle Partenaire + factorisation RLS via helper + auto-cochage producer access + suppression docs scopée (déployée 2026-05-05)**
+- **Dark mode auto** : suit `prefers-color-scheme` de l'OS sans rechargement (CSS pur, pas de listener JS — réagit aux changements de thème système à chaud). Override des tokens `@theme` (`--color-surface`, `--color-text-primary`, `--gantt-bg`, `--gantt-header`) dans un block `@media (prefers-color-scheme: dark)` dans `src/index.css`. Compat shim CSS pour les ~30 utilities Tailwind les plus utilisées (bg-white, slate-{50→900}, border-slate-{100→800}, badges {red,emerald,amber,blue,violet,fuchsia,teal,orange,cyan}-{50,200,700,800}). `@media print` force le rendu clair quel que soit le scheme OS (un export sombre est illisible imprimé). Sidebar navy et logos sur cercles blancs inchangés (déjà OK dans les deux modes). Grain SVG retiré en dark (fond plat plus propre).
+- **Nouveau rôle `partner`** (027) : access_level enum étendu, mêmes droits qu'un `production_manager` (CRUD scopé par pays sur lots/tasks/documents/producer_documents/funders/milestones/deliverables, pas d'accès Espace Producteurs par défaut). Badge UI indigo (`bg-indigo-50 text-indigo-700`) distinct de l'amber des coproducer/production_manager. Sélectionnable dans EditMemberModal entre production_manager et contractor. Aucun membre seedé pour l'instant — le rôle est dispo pour les futurs ajouts via Équipe.
+- **Helper SQL `is_project_writer(_project_id, _country)`** (027) : factorise la logique writer dupliquée 21 fois dans les policies depuis 017. Retourne TRUE pour admin (any country) OU coproducer/production_manager/partner (matching country). 21 policies country-scoped migrées pour appeler le helper (lots, tasks, documents, producer_documents, funders, milestones, deliverables × 3 actions chacune). Ajouter un futur rôle = éditer la fonction, pas réécrire 21 policies.
+- **Auto-cochage `has_producer_access`** (028) : trigger BEFORE INSERT sur project_members qui flippe `has_producer_access=true` quand `access_level IN ('admin', 'coproducer')` et que la valeur entrante est `false` (signal "default, pas d'opinion"). Décision option (a) Pierre 2026-05-05 : on garde le flag indépendant du rôle pour préserver la granularité (Mathieu reste à false), on simplifie juste la création de comptes coproducer. Ne touche pas les lignes existantes ni les UPDATE de access_level.
+- **Lacune SELECT partner** (029, partie A) : 027 avait centralisé l'écriture via is_project_writer mais avait oublié les SELECT (rôle list inline dans les policies de lecture). Sans ce patch, partner pouvait écrire mais pas lire documents/tasks/producer_documents/funding_sources/budget_lines. Patch : ajout 'partner' aux 5 listes de rôles SELECT concernées. Lesson interne : quand on ajoute un rôle, audit 360 (SELECT + INSERT + UPDATE + DELETE), pas juste les writers.
+- **DELETE scopé pour production_manager / partner** (029, partie B) : resserrement de la policy DELETE sur documents et producer_documents. Admin et coproducer inchangés (any country / country match). production_manager et partner ne peuvent désormais supprimer QUE leurs propres uploads (country match AND `uploaded_by = auth.uid()`). UPDATE reste inchangé (édition incrémentale autorisée sur tout doc dans leur pays). Asymétrie volontaire : DELETE est final, garde anti-dégât.
+- **UI** : Calendrier `canCreate` étendu à production_manager + partner (la RLS l'autorisait déjà via 017/027 mais le bouton « + Jalon » était caché — bug pré-existant). EditDocumentModal et EditProducerDocumentModal gagnent un prop `canDelete` (default true en compat) qui cache le bouton Supprimer si false. Helpers `canDelete{Producer}Document` calculent l'éligibilité côté Documents.jsx / ProducerDocuments.jsx selon rôle + pays + uploaded_by.
+- **Workflow déploiement** : 4 PRs livrées en branches dédiées, 3 migrations appliquées sur Supabase prod via `supabase db query --linked --file` (Management API, pas besoin de password DB) avec vérification post-application avant chaque suivante. BEGIN/COMMIT wrapper sur chaque fichier pour atomicité. Puis 4 merges --no-ff sur main et push unique pour déclencher Netlify une seule fois. Branches feat/* supprimées local + remote.
+
 **Migrations**
 - 001 — schéma initial (11 tables, RLS, helpers SECURITY DEFINER)
 - 002 — `project_settings` (taux change) + RLS budget_lines élargie pour coproducer
@@ -91,6 +101,9 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - 024 — `milestones.funder_id` (FK funders, nullable, ON DELETE SET NULL) + index + trigger `track_imported_changes` étendu pour surveiller funder_id (aucun backfill — les 16 jalons existants restent NULL = « Production interne »)
 - 025 — `milestones.archived` (bool NOT NULL default false) + `archived_at` + `archived_by` (FK users) + index `(project_id, archived)` + trigger autoritatif BEFORE INSERT/UPDATE qui force timestamps côté serveur (pattern 019). Pas d'ajout aux watched_fields de track_imported_changes — l'archivage est opérationnel, pas éditorial.
 - 026 — `funders.archived` (bool NOT NULL default false) + `funders.notes` (text nullable) + index `(project_id, archived)` + DELETE du livrable « FilmFund Dév. — note d'intention » (id 0003) + UPDATE FFL Dév archived=true (décision Virginie option C)
+- 027 — `project_members.access_level` étendu à `'partner'` + helper SQL `is_project_writer(_project_id, _country)` qui factorise la logique writer (admin escape OU coproducer/production_manager/partner avec country match) + 21 policies country-scoped migrées pour appeler le helper (lots, tasks, documents, producer_documents, funders, milestones, deliverables × 3 actions) + comments_insert ajout `'partner'` à la liste des rôles
+- 028 — trigger BEFORE INSERT sur project_members qui flippe `has_producer_access=true` quand access_level IN (admin, coproducer) et valeur entrante = false. Décision option (a) Pierre : on garde le flag indépendant pour préserver la granularité actuelle (Mathieu coproducer sans accès), on automatise juste le défaut à la création
+- 029 — (A) ajout `'partner'` aux 5 policies SELECT manquantes (documents, tasks, producer_documents, funding_sources, budget_lines) — lacune de 027 qui ne traitait que l'écriture ; (B) DELETE resserré sur documents et producer_documents : production_manager et partner ne peuvent supprimer que leurs propres uploads (`uploaded_by = auth.uid()` en plus du country match)
 
 **Hosting**
 - Auto-deploy GitHub → Netlify activé depuis 2026-04-28 (lien repo dans Netlify dashboard, branche `main`, ~12s de build par push)
@@ -111,7 +124,7 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - Génération assistée de rapports avec IA
 - Page Paramètres : gestion équipe depuis l'UI (créer un user sans passer par migration SQL), catégories documents personnalisables
 - Module commentaires : édition de commentaire, threads imbriqués (mentions @user fait en 023)
-- Code splitting `React.lazy()` sur Budget et Calendrier (bundle à 675 KB après 3.6, au-delà du seuil Vite 500 KB — devient pressant)
+- Code splitting `React.lazy()` sur Budget et Calendrier (bundle à 677 KB après 3.7, au-delà du seuil Vite 500 KB — devient pressant)
 - Vue Gantt — zoom (compact/standard/wide), regroupement FilmFund Dév+Prod en swimlane unique, sticky header timeline, export image
 - Migration éventuelle pour lier lots ↔ milestones et deliverables ↔ documents (jonctions toujours absentes)
 - Recherche Documents : ajout `notes` à la table `documents` si Virginie veut chercher dans les notes (actuellement title + version seulement). Étendre éventuellement à `producer_documents` avec gating `has_producer_access`.
@@ -142,16 +155,18 @@ Outil de gestion de production pour coproductions internationales. Première ins
 ### Permissions (RLS) — Principe Virginie
 **Tout le monde lit tout. L'écriture est filtrée par pays sauf admin.**
 
-Règle générale après audit complet (migration 017) :
+Règle générale après audit complet (migration 017, factorisée 027, complétée 029) :
 - **Lecture** : accès au projet = lecture de tout (documents, lots, livrables, jalons, équipes). Sauf entités sensibles (budget_lines, producer_documents, funding_sources) qui passent une barrière `has_producer_access` supplémentaire.
-- **Écriture** : admin écrit partout (any country). Coproducer + production_manager écrivent sur leur pays uniquement. Contractor : pas d'écriture sauf sur ses propres documents uploadés.
+- **Écriture** : admin écrit partout (any country). Coproducer + production_manager + partner écrivent sur leur pays uniquement (logique factorisée dans le helper SQL `is_project_writer(_project_id, _country)` depuis 027 — utilisé par 21 policies country-scoped). Contractor : pas d'écriture sauf sur ses propres documents uploadés.
+- **Suppression docs** : production_manager et partner peuvent éditer (UPDATE) toute fiche dans leur pays, mais ne peuvent supprimer (DELETE) QUE leurs propres uploads (depuis 029). Garde anti-dégât sur action irréversible. Admin et coproducer suppriment normalement (any country / country match).
 - Les commentaires et entrées d'`activity_log` sur les entités sensibles sont aussi filtrés par `has_producer_access` — pas de fuite par effet de bord.
 
-Quatre niveaux d'accès (access_level dans project_members) :
-1. `admin` — Virginie. Lecture tout. Écriture partout. Espace Producteurs total.
-2. `coproducer` — Mathieu (DE), Marie (DE), Hélène (PB). Lecture tout. Écriture sur son pays. Espace Producteurs si `has_producer_access` (Marie et Hélène : oui).
-3. `production_manager` — William (DE), Anne-Lise (PB), Pierre Michaud (JAXA). Lecture tout. Écriture sur son pays sur tableaux/jalons/livrables/documents. Lecture seule sur budget_lines et funding_sources. Espace Producteurs si `has_producer_access` (William et Anne-Lise : oui).
-4. `contractor` — Raphaël (Voulez-Vous), Antoine (Freelance), Aude (Indépendante), Jérémy + Louis (Neek Studio). Uniquement les documents qu'ils ont uploadés. Pas d'accès Espace Producteurs.
+Cinq niveaux d'accès (access_level dans project_members) :
+1. `admin` — Virginie. Lecture tout. Écriture partout. Espace Producteurs total. Auto-coché `has_producer_access=true` à la création (depuis 028).
+2. `coproducer` — Mathieu (DE), Marie (DE), Hélène (PB). Lecture tout. Écriture sur son pays. Espace Producteurs si `has_producer_access` (auto-coché à la création depuis 028 ; Marie et Hélène : oui ; Mathieu : non, désactivé manuellement — ne sera pas réactivé par 028 sur les lignes existantes).
+3. `production_manager` — William (DE), Anne-Lise (PB), Pierre Michaud (JAXA). Lecture tout. Écriture sur son pays sur tableaux/jalons/livrables/documents. Suppression docs limitée à ses propres uploads (depuis 029). Lecture seule sur budget_lines et funding_sources. Espace Producteurs si `has_producer_access` (William et Anne-Lise : oui).
+4. `partner` (depuis 027) — aucun membre seedé pour l'instant. Mêmes droits que production_manager (CRUD scopé par pays, suppression docs limitée à ses uploads). Pas d'accès Espace Producteurs par défaut. Badge UI distinct (indigo) pour différencier visuellement d'un chargé·e de production interne.
+5. `contractor` — Raphaël (Voulez-Vous), Antoine (Freelance), Aude (Indépendante), Jérémy + Louis (Neek Studio). Uniquement les documents qu'ils ont uploadés. Pas d'accès Espace Producteurs.
 
 ### Espace Producteurs — couche de confidentialité
 
@@ -183,7 +198,7 @@ id (uuid PK), name, country, currency (CAD|EUR), role (producer|coproducer|contr
 id (uuid PK), org_id (FK), email, full_name, role, country
 
 ### project_members
-id (uuid PK), project_id (FK), org_id (FK), user_id (FK), access_level (admin|coproducer|production_manager|contractor)
+id (uuid PK), project_id (FK), org_id (FK), user_id (FK), access_level (admin|coproducer|production_manager|partner|contractor — partner depuis 027), has_producer_access (bool, auto-coché à la création pour admin/coproducer depuis 028)
 
 ### lots
 id (uuid PK), project_id (FK), org_id (FK), name, director, country, status (prototype|in_production|post_production|delivered), sort_order
