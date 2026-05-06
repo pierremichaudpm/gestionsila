@@ -361,9 +361,13 @@ function ProducerDocumentRow({ doc, folder, profile, accessLevel, onAction, onEd
             href={doc.drive_url}
             target="_blank"
             rel="noreferrer"
-            className="text-xs text-brand-blue hover:underline"
+            title="Ouvrir dans Google Drive"
+            aria-label="Ouvrir dans Google Drive"
+            className="inline-flex h-7 w-7 items-center justify-center rounded text-brand-blue hover:bg-slate-100"
           >
-            Drive ↗
+            <svg width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <path d="M4.5 2h-2A1.5 1.5 0 0 0 1 3.5v6A1.5 1.5 0 0 0 2.5 11h6A1.5 1.5 0 0 0 10 9.5v-2M7 1h4v4M5 7l5.5-5.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </a>
         </td>
       </tr>
