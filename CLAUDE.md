@@ -8,7 +8,7 @@ Outil de gestion de production pour coproductions internationales. Première ins
 **Budget Phase 1 :** 3 500 $ CAD
 **Deadline :** Opérationnel mi-mai 2026
 
-## État d'avancement (2026-05-01)
+## État d'avancement (2026-05-20)
 
 **Phase 1 ✓ — déployée en prod : [https://gestion-sila.netlify.app](https://gestion-sila.netlify.app)**
 - Auth flow complet : AuthProvider context, ProtectedRoute, page Login, profil + logout dans la sidebar
@@ -64,6 +64,22 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - **Composants partagés** : `SlideOver` (wrapper réutilisable panneau droit, backdrop, ESC, scroll body verrouillé) — utilisé par `FunderDetailPanel` et `DocumentSearchPanel`. `ArchiveCheckbox` mutualisé timeline + Gantt. `TimelineItem` extrait pour réutiliser dans `ArchiveSection` (mode `dimmed`).
 - **Fix Dashboard archivage** (commit `f621c0f`) : un jalon archivé continuait d'apparaître dans « Attention requise » et « Prochaines échéances ». Filtre `.eq('archived', false)` ajouté sur les requêtes milestones de `AttentionBlock`, `UpcomingDeliverablesBlock`, et sur l'embed `milestones.archived` du `LotsBlock` (PostgREST filtre la ressource embarquée sans inner-join). `RecentActivityBlock` non touché — entrées non cliquables, historique conservé.
 
+**Phase A ✓ — Module Tâches Kanban (déployée 2026-05-20)**
+- **Migration 031** : refonte complète de la table `tasks` (existait depuis 001 mais inutilisée) — `lot_id` nullable, `end_date` → `due_date`, `phase` libre (plus d'enum), `status` étendu (+validated), `depends_on uuid[]` (remplace FK scalaire). +22 colonnes : `project_id`, `milestone_id`, `external_id`, `description`, `acte`, `discipline`, `priority`, `progress_pct`, `estim_hours`, `actual_hours`, `deliverable`, `validation_notes`, `notes`, `country`, `position`, `archived` (+audit), `created_by`, `last_modified_by/at`, `updated_at`. 5 triggers : `protect_created_by`, `set_last_modified`, `protect_archive_columns`, `set_updated_at`, `log_task_activity`. RLS ouverte : lecture + écriture tout membre, DELETE admin only. `comments.entity_type` étendu à 'task' + `log_comment_activity` mis à jour.
+- **Kanban 5 colonnes** (`TasksKanbanView.jsx`) : À faire / En cours / Bloqué / Terminé / Validé. Drag-and-drop cross-column + réordonnancement intra-colonne via `@dnd-kit/sortable`. Optimistic UI avec rollback sur erreur Supabase. `DragOverlay` pour la card flottante. Mobile : `TouchSensor` avec délai 250ms.
+- **Vue Table** (`TasksTableView.jsx`) : 9 colonnes triables (priorité, titre, statut, responsable, échéance, tableau, avancement, commentaires, modifié). Clic ligne → slide-over détail.
+- **TaskCard** : bordure gauche colorée par pays du tableau rattaché (palette `ganttColors.js` réutilisée). Badge priorité P0-P3, progression inline, avatar responsable, date échéance rouge si dépassée, compteur commentaires.
+- **TaskDetailPanel** : slide-over xl, tous les champs en édition inline (titre, description, statut, priorité, tableau, responsable, jalon parent, phase/acte/discipline, dates, effort, avancement slider 0-100%, livrable, validation_notes, notes, dépendances multi-select). CommentThread `entity_type='task'` en bas. Archiver/désarchiver + supprimer avec confirmation (admin only).
+- **NewTaskModal** : création rapide (titre + statut + priorité + tableau + responsable). Champ `position = Date.now()` pour garantir l'unicité sans réindexer.
+- **Page `/taches`** : toggle Kanban/Table, bandeau filtres (tableau, phase, acte, responsable, priorité, statut) via `useTaskFilters`, section archive repliable, chargement bulk des commentCounts.
+- **Dashboard** : `AttentionBlock` étendu — tâches avec `due_date` dans les 7 prochains jours (status non-done/validated, archived=false) remontent dans « Attention requise ».
+- **Sidebar** : entrée « Tâches » entre Calendrier et Tableaux.
+- **@dnd-kit** installé : `@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities`.
+- **Phase B** (import Excel 110 tâches) : à faire dans une session séparée une fois le module validé en prod.
+
+**Membre ajouté (2026-05-20)**
+- **Cylia Rabhi** (`rbhcelya@gmail.com`) — JAXA Production inc. CA — admin + has_producer_access. Migration 032 appliquée manuellement via SQL Editor (voir section Problèmes ci-dessous dans WORKING_LOG). Invitation à envoyer depuis la page Équipe (bouton « Envoyer l'invitation » → resetPasswordForEmail).
+
 **Migrations**
 - 001 — schéma initial (11 tables, RLS, helpers SECURITY DEFINER)
 - 002 — `project_settings` (taux change) + RLS budget_lines élargie pour coproducer
@@ -91,6 +107,12 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - 024 — `milestones.funder_id` (FK funders, nullable, ON DELETE SET NULL) + index + trigger `track_imported_changes` étendu pour surveiller funder_id (aucun backfill — les 16 jalons existants restent NULL = « Production interne »)
 - 025 — `milestones.archived` (bool NOT NULL default false) + `archived_at` + `archived_by` (FK users) + index `(project_id, archived)` + trigger autoritatif BEFORE INSERT/UPDATE qui force timestamps côté serveur (pattern 019). Pas d'ajout aux watched_fields de track_imported_changes — l'archivage est opérationnel, pas éditorial.
 - 026 — `funders.archived` (bool NOT NULL default false) + `funders.notes` (text nullable) + index `(project_id, archived)` + DELETE du livrable « FilmFund Dév. — note d'intention » (id 0003) + UPDATE FFL Dév archived=true (décision Virginie option C)
+- 027 — Nouveau rôle `partner` (mêmes droits écriture que production_manager, scopé pays) + factorisation helper `is_project_writer(_project_id, _country)` qui centralise la logique admin-escape/pays des 21 policies écriture issue de 017. `comments_insert` étendu à 'partner'.
+- 028 — Trigger `default_producer_access` BEFORE INSERT sur project_members : flippe `has_producer_access=true` automatiquement pour access_level admin/coproducer. Ne réagit PAS sur UPDATE (promotion contractor → coproducer reste manuelle).
+- 029 — Comble lacune SELECT partner sur documents/tasks/producer_documents/funding_sources/budget_lines (027 avait oublié ces policies). Resserre DELETE documents/producer_documents pour production_manager/partner : own-uploads-only sur leur pays (admin et coproducer inchangés).
+- 030 — Compte de test TESTEUSE VIRGE (`jaffredovirginie@gmail.com`) — contractor CA, org Indépendante, has_producer_access=false. Permet à Virginie de tester la vue Prestataire sans toucher à son compte admin.
+- 031 — Refonte complète table `tasks` (existait depuis 001, inutilisée) : lot_id nullable, end_date → due_date, phase libre, status +validated, depends_on uuid[], +22 colonnes (project_id, milestone_id, priority, progress_pct, position, archived, audit…), 5 triggers, RLS ouverte (tout membre lit/écrit, DELETE admin). `comments.entity_type` +task, `log_comment_activity` mis à jour (7 entity types).
+- 032 — Cylia Rabhi (`rbhcelya@gmail.com`) admin JAXA CA + has_producer_access. Appliqué manuellement via SQL Editor (conflits sur compte pré-existant — voir WORKING_LOG 2026-05-20).
 
 **Hosting**
 - Auto-deploy GitHub → Netlify activé depuis 2026-04-28 (lien repo dans Netlify dashboard, branche `main`, ~12s de build par push)
@@ -99,11 +121,14 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - Sidebar 320px navy avec 3 logos circulaires 88px (Poulpe Bleu en `object-cover`, autres en `object-contain` padding 10px), titre "SILA / Héroïnes Arctiques" sur 2 lignes en `text-2xl bold`
 - Fond crème vintage `#f1e2bc` avec grain SVG (`feTurbulence baseFrequency=0.7`, brun à 28% d'alpha)
 - Footer "Propulsé par Studio Micho · Jaxa" sur toutes les pages protégées
-- Sidebar nav principale : Dashboard / Calendrier / Tableaux / Documents / Livrables / Équipe — Budget retiré
+- Sidebar nav principale : Dashboard / Calendrier / Tâches / Tableaux / Documents / Livrables / Équipe — Budget retiré
 - Sidebar Espace Producteurs (visible si `has_producer_access`) : Assurances / Légal / Devis initiaux / Budget — avec icône cadenas
 
 **Données**
-- Tous les emails sont les vrais à présent : `virginiejaffredo@jaxa.ca`, `pierre.michaud@jaxa.ca`, `mrozieres@dark-euphoria.com`, `marie@dark-euphoria.com`, `wboard@dark-euphoria.com`, `helenewalland@gmail.com`, `millerannelise@gmail.com`, `raphael@voulez-vous.studio`, `antoine@freelance.example`, `aude@guivar.ch`, `jeremy@neek.studio`, `louis@neek.studio`. Antoine reste en placeholder le temps que Virginie nous donne son vrai email.
+- Tous les emails sont les vrais à présent : `virginiejaffredo@jaxa.ca`, `pierre.michaud@jaxa.ca`, `mrozieres@dark-euphoria.com`, `marie@dark-euphoria.com`, `wboard@dark-euphoria.com`, `helenewalland@gmail.com`, `millerannelise@gmail.com`, `raphael@voulez-vous.studio`, `antoine@freelance.example`, `aude@guivar.ch`, `jeremy@neek.studio`, `louis@neek.studio`, `rbhcelya@gmail.com` (Cylia Rabhi). Antoine reste en placeholder le temps que Virginie nous donne son vrai email.
+
+**Phase B — Import tâches Excel (prochaine session)**
+- Import des ~110 tâches depuis le fichier Excel SILA dans la nouvelle table `tasks`. UUID de tâche stable via `external_id` (slug ou ID Excel). À planifier avec Virginie pour le format exact d'export.
 
 **Phase 4 — non planifiée, non chiffrée**
 - Notifications email Resend (rappels échéances, validations en attente, nouveaux commentaires, changements de taux, **mention dans un commentaire** depuis 023). SMTP intégré Supabase fonctionne actuellement mais limité à ~2-4 emails/h ; à reconsidérer si volume monte.
@@ -111,7 +136,7 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - Génération assistée de rapports avec IA
 - Page Paramètres : gestion équipe depuis l'UI (créer un user sans passer par migration SQL), catégories documents personnalisables
 - Module commentaires : édition de commentaire, threads imbriqués (mentions @user fait en 023)
-- Code splitting `React.lazy()` sur Budget et Calendrier (bundle à 675 KB après 3.6, au-delà du seuil Vite 500 KB — devient pressant)
+- Code splitting `React.lazy()` sur Budget, Calendrier, Tâches (bundle > 500 KB Vite threshold — pressant)
 - Vue Gantt — zoom (compact/standard/wide), regroupement FilmFund Dév+Prod en swimlane unique, sticky header timeline, export image
 - Migration éventuelle pour lier lots ↔ milestones et deliverables ↔ documents (jonctions toujours absentes)
 - Recherche Documents : ajout `notes` à la table `documents` si Virginie veut chercher dans les notes (actuellement title + version seulement). Étendre éventuellement à `producer_documents` avec gating `has_producer_access`.
@@ -183,13 +208,13 @@ id (uuid PK), name, country, currency (CAD|EUR), role (producer|coproducer|contr
 id (uuid PK), org_id (FK), email, full_name, role, country
 
 ### project_members
-id (uuid PK), project_id (FK), org_id (FK), user_id (FK), access_level (admin|coproducer|production_manager|contractor)
+id (uuid PK), project_id (FK), org_id (FK), user_id (FK), access_level (admin|coproducer|production_manager|partner|contractor)
 
 ### lots
 id (uuid PK), project_id (FK), org_id (FK), name, director, country, status (prototype|in_production|post_production|delivered), sort_order
 
-### tasks
-id (uuid PK), lot_id (FK), assigned_to (FK user), title, phase (dev|shooting|post|integration|delivery), start_date, end_date, status, depends_on (FK task, nullable)
+### tasks (refondu en 031)
+id (uuid PK), project_id (FK), lot_id (FK nullable), assigned_to (FK user nullable), milestone_id (FK nullable), external_id (text nullable), title, description, phase (text libre nullable), acte (text nullable), discipline (text nullable), status (todo|in_progress|blocked|done|validated), priority (p0|p1|p2|p3 nullable), progress_pct (int 0-100), estim_hours, actual_hours, due_date (date nullable), deliverable (text nullable), validation_notes, notes, country, position (numeric), depends_on (uuid[] default []), archived (bool), archived_at, archived_by (FK user), created_by (FK user), created_at, updated_at, last_modified_by (FK user), last_modified_at. RLS ouverte : tout membre peut lire/créer/modifier, DELETE admin only.
 
 ### documents
 id (uuid PK), project_id (FK), lot_id (FK, nullable), uploaded_by (FK user), title, category (contract|scenario|artistic_dossier|report|technical_deliverable|invoice|reference), folder (techno|creation|texte|divers, default 'divers'), country, version (int), validation_status (draft|pending|approved|archived), drive_url, drive_file_id, created_at, updated_at + colonnes audit (imported, imported_value, last_modified_by, last_modified_at)
@@ -213,7 +238,7 @@ project_id (uuid PK), exchange_rate_eur_to_cad (decimal), exchange_rate_cad_to_e
 id (uuid PK), project_id (FK), rate_eur_to_cad, rate_cad_to_eur, effective_date, set_by_user_id (FK user), created_at — append-only, alimenté automatiquement par trigger sur project_settings UPDATE
 
 ### comments (depuis 005)
-id (uuid PK), project_id (FK), entity_type (document|deliverable|milestone|lot|budget_line|producer_document — étendu en 009), entity_id, user_id (FK), content, created_at, updated_at
+id (uuid PK), project_id (FK), entity_type (document|deliverable|milestone|lot|budget_line|producer_document|task — task ajouté en 031), entity_id, user_id (FK), addressed_to (FK user nullable, depuis 023), content, created_at, updated_at
 
 ### producer_documents (depuis 009)
 id (uuid PK), project_id (FK), lot_id (FK, nullable), uploaded_by (FK user), folder (assurances|legal), title, country, version, validation_status, drive_url, drive_file_id, created_at, updated_at + colonnes audit. Isolée des `documents` publics — RLS gated par `has_producer_access`.

@@ -1,5 +1,97 @@
 # WORKING_LOG — Gestion SILA
 
+## Session 2026-05-20 — Phase A : module Tâches Kanban + Cylia Rabhi admin
+
+### Objectif
+Implémenter le module de gestion des tâches opérationnelles (style Kanban Asana) et ajouter Cylia Rabhi comme admin JAXA.
+
+### Ce qui a été fait
+
+#### Module Tâches — Phase A (commits sur branche feat/tasks-module, mergé sur main)
+
+**Migration 031** (`031_tasks_module.sql`) :
+- Refonte complète de la table `tasks` (existait depuis 001 mais inutilisée depuis Phase 1). Plutôt que DROP/CREATE, on passe par ALTER TABLE pour être propre.
+- `lot_id` NOT NULL → nullable (ON DELETE CASCADE → SET NULL). Permet les tâches transversales.
+- RENAME `end_date` → `due_date` (confirmé après réflexion — table vide, pas de migration de données).
+- DROP `tasks_phase_check` ; `phase` devient text libre nullable (exit l'enum figé dev/shooting/post…).
+- `status` CHECK étendu : + 'validated' (cohérent avec milestone/deliverable).
+- `depends_on` : FK scalaire → `uuid[]` (tableau de dépendances multiples).
+- +22 colonnes : `project_id` NOT NULL (backfillé depuis lots), `milestone_id` FK, `external_id` pour import futur, `description`, `acte`, `discipline`, `priority` (p0-p3), `progress_pct`, `estim_hours`, `actual_hours`, `deliverable`, `validation_notes`, `notes`, `country`, `position` (numeric pour réordonnancement Kanban), `archived` + `archived_at` + `archived_by`, `created_by`, `last_modified_by`, `last_modified_at`, `updated_at`.
+- 5 indexes : `(project_id, status, position)`, `(project_id, assigned_to)`, `(project_id, lot_id)`, `(project_id, milestone_id)`, `(project_id, archived)`.
+- 5 triggers : `tasks_set_updated_at`, `tasks_protect_created_by`, `tasks_set_last_modified`, `tasks_protect_archive_columns` (pattern 019/025), `tasks_log_activity`.
+- DROP 4 anciennes policies (001+017+027+029). CREATE 4 nouvelles RLS ouverte collaboration : SELECT any member, INSERT any member, UPDATE any member, DELETE admin only. Utilise `is_project_member(project_id)` directement (lot_id nullable — l'helper `lot_project_id` casse sur NULL).
+- `ALTER TABLE comments DROP CONSTRAINT comments_entity_type_check` + ADD avec 'task'.
+- `CREATE OR REPLACE FUNCTION log_comment_activity()` — gère les 7 entity types (document, deliverable, milestone, lot, budget_line, producer_document, task).
+
+**8 nouveaux fichiers** :
+- `src/components/taches/TaskCard.jsx` — `useSortable` (@dnd-kit), bordure gauche colorée par pays (`ganttColors.js`), badge priorité P0-P3, avatar responsable, date rouge si dépassée, compteur commentaires. Exports `TaskCard` (sortable) + `TaskCardOverlay` (non-sortable pour DragOverlay).
+- `src/components/taches/TasksKanbanView.jsx` — 5 colonnes (todo/in_progress/blocked/done/validated). `DndContext` + `useDroppable` par colonne. `computePosition()` midpoint (insert = (prev+next)/2, extrémités ±1000). Optimistic UI avec `snapshot` rollback sur erreur Supabase.
+- `src/components/taches/TasksTableView.jsx` — 9 colonnes (priorité, titre, statut, responsable, échéance, tableau, avancement, commentaires, modifié). Tri multi-colonnes. `PRIORITY_ORDER` + `STATUS_ORDER` pour tri sémantique.
+- `src/components/taches/useTaskFilters.js` — hook `useTaskFilters(tasks)` : filtres lot, phase, acte, assignee, priority, status. `uniqueValues(tasks, field)` pour options dynamiques.
+- `src/components/taches/NewTaskModal.jsx` — création rapide via `Modal`. `position = Date.now()` pour unicité sans réindexer.
+- `src/components/taches/TaskDetailPanel.jsx` — slide-over xl. Tous champs en édition inline (`InlineText`, `InlineSelect`, `ProgressSlider`). `DependenciesSelect` multi-select tag-style. `CommentThread entityType="task"`. Archiver/supprimer avec confirmation (admin only).
+- `src/pages/Taches.jsx` — page principale. Toggle Kanban/Table. Bandeau filtres. Compteurs. Section archive repliable. `loadCommentCounts` best-effort async.
+- `src/lib/format.js` additions : `TASK_STATUS`, `TASK_PRIORITY`, `taskStatus()`, `taskPriority()`, `TASK_STATUS_OPTIONS`, `TASK_PRIORITY_OPTIONS`.
+
+**3 fichiers modifiés** :
+- `src/App.jsx` — `import Taches` + `<Route path="/taches">`.
+- `src/components/layout/Sidebar.jsx` — `{ to: '/taches', label: 'Tâches' }` entre Calendrier et Tableaux.
+- `src/components/production/AttentionBlock.jsx` — `TASKS_WINDOW_DAYS=7`, requête tâches (non-done/validated, archived=false, due_date ≤ horizon), `taskItems` dans la liste.
+
+**Package installé** : `@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities`.
+
+#### Ajout Cylia Rabhi admin (migration 032)
+
+**Objectif** : ajouter `rbhcelya@gmail.com` (Cylia Rabhi) comme admin JAXA Production inc. avec accès Espace Producteurs.
+
+**Migration 032** écrite avec bcrypt password temporaire `Tmp!SILA2026#C`. Application via SQL Editor — cascade d'erreurs (voir Problèmes ci-dessous).
+
+**État final en prod** :
+- UUID `33333333-0000-0000-0000-000000000014`
+- email `rbhcelya@gmail.com`, full_name `Cylia Rabhi`
+- org JAXA (`22222222-0000-0000-0000-000000000001`), country CA
+- access_level `admin`, has_producer_access `true`
+- Invitation à envoyer depuis Équipe → card Cylia → « Envoyer l'invitation »
+
+### Décisions techniques
+
+- **RENAME end_date → due_date** : table vide, pas de migration de données. Aligné avec le reste du codebase (deliverables utilisent déjà `due_date`).
+- **@dnd-kit** choisi sur react-beautiful-dnd (déprécié) et dnd-kit/core seul. `@dnd-kit/sortable` fournit `useSortable` + `SortableContext` + algorithmes de détection de collision.
+- **Optimistic UI avec snapshot** : `const snapshot = localTasks` avant la mise à jour optimiste. Si `onTaskUpdate` throw, on revert avec `setLocalTasks(snapshot)`. Évite un rechargement complet.
+- **Position midpoint** plutôt que réindexation : `computePosition(sortedTasks, idx)` calcule (prev+next)/2. Pas de UPDATE bulk à chaque DnD. Dérive possible après ~52 mouvements d'un item (float precision), acceptable en pratique.
+- **RLS ouverte sur tasks** : tout membre peut créer/éditer une tâche dans son projet. Différent du pattern pays des documents/jalons. Justification : les tâches sont opérationnelles (chaque contributeur peut gérer son work), pas confidentielles (pas d'enjeu financier ou legal).
+- **`is_project_member(project_id)` directement** (pas via `lot_project_id`). Depuis 031 les tâches ont `project_id` propre — plus besoin de passer par le lot parent. Et `lot_id` étant nullable, `lot_project_id(NULL)` retournerait NULL et casserait les policies.
+- **Note sur trigger 028** : `default_producer_access` ne fire que sur INSERT, pas sur le chemin UPDATE d'un ON CONFLICT DO UPDATE. Ce comportement est documenté dans la migration — ça a causé un problème lors de la création de Cylia.
+- **`resetPasswordForEmail` vs `inviteUserByEmail`** : le bouton « Envoyer l'invitation » dans `Equipe.jsx` appelle `supabase.auth.resetPasswordForEmail()`, pas `inviteUserByEmail`. Le CLAUDE.md v3 mentionnait à tort `inviteUserByEmail` — corrigé dans cette session.
+
+### Problèmes rencontrés
+
+#### Migration 032 — cascade d'erreurs
+
+1. **Erreur 23505 duplicate key** : le DO block (`auth.users` INSERT) a réussi, mais `public.users` INSERT a échoué (`rbhcelya@gmail.com` pré-existait dans public.users depuis un test précédent). Résultat : entrée orpheline dans auth.users.
+   - Fix : DELETE de l'entrée orpheline auth.users + UPDATE de la ligne existante public.users.
+
+2. **has_producer_access = false** : ON CONFLICT DO UPDATE sur project_members a pris le chemin UPDATE, pas INSERT → trigger `default_producer_access` (028) n'a pas firé.
+   - Fix : `UPDATE project_members SET has_producer_access = true WHERE user_id = (SELECT id FROM public.users WHERE email = 'rbhcelya@gmail.com')`.
+
+3. **Mauvais nom** : migration écrite avec "Celya Rbh" (orthographe approximative de session). Le vrai nom est "Cylia Rabhi".
+   - Fix : `UPDATE public.users SET full_name = 'Cylia Rabhi' WHERE email = 'rbhcelya@gmail.com'`.
+
+4. **Mauvaise org** : l'entrée pré-existante dans public.users était rattachée à l'org Indépendante, pas JAXA.
+   - Fix : `UPDATE public.users SET org_id = '22222222-0000-0000-0000-000000000001' WHERE email = 'rbhcelya@gmail.com'` + même UPDATE sur project_members.
+
+#### Invitation Cylia non reçue
+
+Virginie a signalé que Celya (sic) n'avait pas reçu l'invitation. Cause probable : rate-limiting SMTP intégré Supabase (~2-4 emails/h). À retenter via le bouton « Envoyer l'invitation » sur sa card dans la page Équipe, ou vérifier dossier spam.
+
+### Prochaines étapes
+
+- **Phase B** : import des ~110 tâches depuis le fichier Excel SILA → session dédiée, à planifier avec Virginie.
+- **Migration 031 à appliquer en prod** : toujours en attente d'application via SQL Editor (à faire après validation des composants en local/netlify).
+- **Code splitting** : bundle > 500 KB (Vite threshold). Tâches/Budget/Calendrier bons candidats pour `React.lazy()`.
+
+---
+
 ## Session 2026-05-01 — Phase 3.6 : batch 12 modifs Virginie (4 sections + 2 fixes)
 
 ### Objectif
