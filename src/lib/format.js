@@ -177,6 +177,36 @@ export function folderForCategory(category) {
   return CATEGORY_TO_FOLDER[category] ?? 'divers'
 }
 
+// ============================================================================
+// TÂCHES
+// ============================================================================
+
+const TASK_STATUS = {
+  todo:        { label: 'À faire',  tone: 'neutral' },
+  in_progress: { label: 'En cours', tone: 'warn' },
+  blocked:     { label: 'Bloqué',   tone: 'late' },
+  done:        { label: 'Terminé',  tone: 'ok' },
+  validated:   { label: 'Validé',   tone: 'ok' },
+}
+
+const TASK_PRIORITY = {
+  p0: { label: 'P0', badgeClass: 'bg-red-100 text-red-700',    dot: 'bg-red-500' },
+  p1: { label: 'P1', badgeClass: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
+  p2: { label: 'P2', badgeClass: 'bg-blue-100 text-blue-700',  dot: 'bg-blue-500' },
+  p3: { label: 'P3', badgeClass: 'bg-slate-100 text-slate-500', dot: 'bg-slate-400' },
+}
+
+export function taskStatus(s) {
+  return TASK_STATUS[s] ?? { label: s, tone: 'neutral' }
+}
+
+export function taskPriority(p) {
+  return TASK_PRIORITY[p] ?? { label: p, badgeClass: 'bg-slate-100 text-slate-500', dot: 'bg-slate-400' }
+}
+
+export const TASK_STATUS_OPTIONS  = Object.keys(TASK_STATUS)
+export const TASK_PRIORITY_OPTIONS = Object.keys(TASK_PRIORITY)
+
 export const LOT_STATUS_OPTIONS = Object.keys(LOT_STATUS)
 export const DELIVERABLE_STATUS_OPTIONS = Object.keys(DELIVERABLE_STATUS)
 export const FUNDER_STATUS_OPTIONS = Object.keys(FUNDER_STATUS)
