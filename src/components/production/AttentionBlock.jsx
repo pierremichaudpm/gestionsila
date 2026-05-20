@@ -10,7 +10,8 @@ import {
   toneClass,
 } from '../../lib/format'
 
-const WINDOW_DAYS = 14
+const WINDOW_DAYS      = 14
+const TASKS_WINDOW_DAYS = 7
 
 export default function AttentionBlock({ projectId }) {
   const [items, setItems] = useState([])
@@ -28,6 +29,10 @@ export default function AttentionBlock({ projectId }) {
       const horizon = new Date()
       horizon.setDate(horizon.getDate() + WINDOW_DAYS)
       const horizonDate = horizon.toISOString().slice(0, 10)
+
+      const tasksHorizon = new Date()
+      tasksHorizon.setDate(tasksHorizon.getDate() + TASKS_WINDOW_DAYS)
+      const tasksHorizonDate = tasksHorizon.toISOString().slice(0, 10)
 
       const { data: userData } = await supabase.auth.getUser()
       const currentUserId = userData?.user?.id ?? null
@@ -52,6 +57,16 @@ export default function AttentionBlock({ projectId }) {
         .or(`end_date.lte.${horizonDate},and(end_date.is.null,start_date.lte.${horizonDate})`)
         .order('start_date', { ascending: true })
 
+      const tasksQ = supabase
+        .from('tasks')
+        .select('id, title, due_date, status, priority, lot:lots(name)')
+        .eq('project_id', projectId)
+        .not('status', 'in', '("done","validated")')
+        .eq('archived', false)
+        .not('due_date', 'is', null)
+        .lte('due_date', tasksHorizonDate)
+        .order('due_date', { ascending: true })
+
       const documentsQ = currentUserId
         ? supabase
             .from('documents')
@@ -62,15 +77,16 @@ export default function AttentionBlock({ projectId }) {
             .order('updated_at', { ascending: false })
         : Promise.resolve({ data: [], error: null })
 
-      const [deliverablesRes, milestonesRes, documentsRes] = await Promise.all([
+      const [deliverablesRes, milestonesRes, documentsRes, tasksRes] = await Promise.all([
         deliverablesQ,
         milestonesQ,
         documentsQ,
+        tasksQ,
       ])
       if (!alive) return
 
-      if (deliverablesRes.error || milestonesRes.error || documentsRes.error) {
-        setError(deliverablesRes.error ?? milestonesRes.error ?? documentsRes.error)
+      if (deliverablesRes.error || milestonesRes.error || documentsRes.error || tasksRes.error) {
+        setError(deliverablesRes.error ?? milestonesRes.error ?? documentsRes.error ?? tasksRes.error)
         setLoading(false)
         return
       }
@@ -108,6 +124,22 @@ export default function AttentionBlock({ projectId }) {
         }
       })
 
+      const taskItems = (tasksRes.data ?? []).map(task => {
+        const days = daysUntil(task.due_date)
+        const overdue = days !== null && days < 0
+        return {
+          kind: 'task',
+          id: task.id,
+          urgency: overdue ? 0 : 1,
+          badge: badgeForDays(days, overdue),
+          tone: overdue ? 'late' : 'warn',
+          title: task.title,
+          context: task.lot?.name ?? 'Transversal',
+          date: formatDate(task.due_date),
+          to: '/taches',
+        }
+      })
+
       const documentItems = (documentsRes.data ?? []).map(doc => ({
         kind: 'document',
         id: doc.id,
@@ -121,7 +153,7 @@ export default function AttentionBlock({ projectId }) {
       }))
 
       setItems(
-        [...deliverableItems, ...milestoneItems, ...documentItems]
+        [...deliverableItems, ...milestoneItems, ...taskItems, ...documentItems]
           .sort((a, b) => a.urgency - b.urgency)
       )
       setLoading(false)

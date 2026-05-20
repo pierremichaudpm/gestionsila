@@ -13,6 +13,7 @@ import Budget from './pages/Budget.jsx'
 import Equipe from './pages/Equipe.jsx'
 import Parametres from './pages/Parametres.jsx'
 import ProducerDocuments from './pages/ProducerDocuments.jsx'
+import Taches from './pages/Taches.jsx'
 import { useCurrentProject } from './lib/useCurrentProject.js'
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
           <Route index element={<Navigate to="/production" replace />} />
           <Route path="/production" element={<Production />} />
           <Route path="/calendrier" element={<Calendrier />} />
+          <Route path="/taches" element={<Taches />} />
           <Route path="/lots" element={<Lots />} />
           <Route path="/lots/:id" element={<LotDetail />} />
           <Route path="/documents" element={<Documents />} />
