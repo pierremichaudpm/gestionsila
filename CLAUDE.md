@@ -10,7 +10,7 @@ Outil de gestion de production pour coproductions internationales. Première ins
 
 ## État d'avancement (2026-05-20)
 
-**Phase 1 ✓ — déployée en prod : [https://gestion-sila.netlify.app](https://gestion-sila.netlify.app)**
+**Phase 1 ✓ — déployée en prod : [https://silagestion.netlify.app](https://silagestion.netlify.app)**
 - Auth flow complet : AuthProvider context, ProtectedRoute, page Login, profil + logout dans la sidebar
 - Connexion Supabase live (project ref `qqyrqiqnvsvzxqqukcjv`, East US Ohio), migration + seed appliqués
 - 5 pages CRUD : Lots (liste + détail onglets), Documents (table triable + 4 filtres + modal + workflow validation), Livrables (accordéon par bailleur + vue calendrier), Équipe (annuaire par org), Production (dashboard 4 blocs)
