@@ -1,4 +1,3 @@
--- ============================================================================
 -- 033_fix_celya_auth.sql
 --
 -- Répare le compte d'authentification de Cylia Rabhi (rbhcelya@gmail.com).
@@ -34,7 +33,6 @@
 --   temporaire « Tmp!SILA2026#C » puis le changer dans Paramètres.
 --
 -- À LANCER : Supabase → SQL Editor (comme 031/032).
--- ============================================================================
 
 do $$
 declare
@@ -108,7 +106,6 @@ begin
   raise notice 'Compte auth de % réparé (id %).', v_email, v_uid;
 end $$;
 
--- ----------------------------------------------------------------------------
 -- VÉRIFICATION post-migration (à lancer juste après) :
 --
 --   select u.id, u.email, u.email_confirmed_at,
@@ -121,4 +118,3 @@ end $$;
 -- Attendu : 1 ligne, email_confirmed_at non NULL, a_un_mdp = true,
 --           provider = 'email'. Ensuite : page Équipe → card Cylia →
 --           « Envoyer l'invitation », ou Cylia utilise « Mot de passe oublié ».
--- ----------------------------------------------------------------------------
