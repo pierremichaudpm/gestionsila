@@ -273,6 +273,24 @@ export default function Calendrier() {
     return Array.from(byMonth.entries())
   }, [activeItems])
 
+  // Masquage par défaut des mois PASSÉS (demande Virginie) — timeline verticale
+  // uniquement (le Gantt et l'archive ne sont pas concernés). Le mois courant
+  // reste TOUJOURS visible, même si ses jalons sont déjà passés.
+  const currentMonthKey = useMemo(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  }, [])
+  const pastMonthsCount = useMemo(
+    () => grouped.filter(([key]) => key < currentMonthKey).length,
+    [grouped, currentMonthKey]
+  )
+  // État local non persisté : reset à chaque chargement (mois passés masqués).
+  const [showPastMonths, setShowPastMonths] = useState(false)
+  const visibleGrouped = useMemo(
+    () => (showPastMonths ? grouped : grouped.filter(([key]) => key >= currentMonthKey)),
+    [grouped, currentMonthKey, showPastMonths]
+  )
+
   // État local des mois repliés (par défaut tous ouverts).
   const [collapsedMonths, setCollapsedMonths] = useState(() => new Set())
   function toggleMonth(monthKey) {
@@ -411,23 +429,44 @@ export default function Calendrier() {
               grouped.length === 0 ? (
                 <EmptyState hasFilters={Object.values(filters).some(v => v !== 'all')} />
               ) : (
-                <div className="space-y-6">
-                  {grouped.map(([monthKey, entries]) => (
-                    <MonthSection
-                      key={monthKey}
-                      monthKey={monthKey}
-                      items={entries}
-                      lots={lots}
-                      milestoneCommentCounts={milestoneCommentCounts}
-                      collapsed={collapsedMonths.has(monthKey)}
-                      onToggleCollapse={() => toggleMonth(monthKey)}
-                      onMilestoneClick={(milestoneId) => {
-                        const m = milestones.find(x => x.id === milestoneId)
-                        if (m) setDetailMilestone(m)
-                      }}
-                      onToggleArchive={handleToggleArchive}
-                    />
-                  ))}
+                <div className="space-y-3">
+                  {/* Bascule mois passés (masqués par défaut). */}
+                  {pastMonthsCount > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowPastMonths(s => !s)}
+                      className="text-xs font-medium text-slate-500 underline-offset-2 transition hover:text-slate-800 hover:underline"
+                    >
+                      {showPastMonths
+                        ? '▾ Masquer les mois passés'
+                        : `▸ ${pastMonthsCount} mois passé${pastMonthsCount > 1 ? 's' : ''} masqué${pastMonthsCount > 1 ? 's' : ''} · Afficher`}
+                    </button>
+                  ) : null}
+
+                  {visibleGrouped.length === 0 ? (
+                    <p className="text-sm italic text-slate-400">
+                      Aucun mois en cours ou à venir — tout est dans les mois passés.
+                    </p>
+                  ) : (
+                    <div className="space-y-6">
+                      {visibleGrouped.map(([monthKey, entries]) => (
+                        <MonthSection
+                          key={monthKey}
+                          monthKey={monthKey}
+                          items={entries}
+                          lots={lots}
+                          milestoneCommentCounts={milestoneCommentCounts}
+                          collapsed={collapsedMonths.has(monthKey)}
+                          onToggleCollapse={() => toggleMonth(monthKey)}
+                          onMilestoneClick={(milestoneId) => {
+                            const m = milestones.find(x => x.id === milestoneId)
+                            if (m) setDetailMilestone(m)
+                          }}
+                          onToggleArchive={handleToggleArchive}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             ) : null}
