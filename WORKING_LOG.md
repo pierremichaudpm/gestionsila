@@ -84,6 +84,8 @@ Implémenter le module de gestion des tâches opérationnelles (style Kanban Asa
 
 Virginie a signalé que Celya (sic) n'avait pas reçu l'invitation. Cause probable : rate-limiting SMTP intégré Supabase (~2-4 emails/h). À retenter via le bouton « Envoyer l'invitation » sur sa card dans la page Équipe, ou vérifier dossier spam.
 
+**Suivi 2026-05-29** — Cylia ne reçoit toujours rien (signalé par Pierre dans le contexte d'une migration d'URL Netlify → `silagestion.netlify.app`). Diagnostic : le backend Supabase est inchangé (`qqyrqiqnvsvzxqqukcjv`), donc les mots de passe existants sont intacts — la migration d'URL n'est pas en cause. La vraie cause n'est probablement pas le rate-limit mais l'**intégrité du compte auth** : le nettoyage de 032 (DELETE de l'entrée `auth.users` orpheline + conservation d'une ligne `public.users` d'un test antérieur) a laissé Cylia sans identité `auth.identities` valide (le seed crée `auth.users` sans identité, gotrue v2.188.1). `resetPasswordForEmail` sur un compte sans identité auth résolvable → aucun courriel envoyé, aucune erreur (anti-énumération) = « ne reçoit rien ». **Migration 033** écrite pour réparer (idempotente, retrouve l'`id` via `public.users`, recrée `auth.users` + `auth.identities`, mdp temporaire de secours). À appliquer via SQL Editor. Point connexe à vérifier au dashboard : **Authentication → URL Configuration** (Site URL + Redirect URLs doivent inclure la nouvelle URL Netlify), sinon les liens des courriels casseront pour tout le monde.
+
 ### Prochaines étapes
 
 - **Phase B** : import des ~110 tâches depuis le fichier Excel SILA → session dédiée, à planifier avec Virginie.

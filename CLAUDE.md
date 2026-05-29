@@ -78,7 +78,7 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - **Phase B** (import Excel 110 tâches) : à faire dans une session séparée une fois le module validé en prod.
 
 **Membre ajouté (2026-05-20)**
-- **Cylia Rabhi** (`rbhcelya@gmail.com`) — JAXA Production inc. CA — admin + has_producer_access. Migration 032 appliquée manuellement via SQL Editor (voir section Problèmes ci-dessous dans WORKING_LOG). Invitation à envoyer depuis la page Équipe (bouton « Envoyer l'invitation » → resetPasswordForEmail).
+- **Cylia Rabhi** (`rbhcelya@gmail.com`) — JAXA Production inc. CA — admin + has_producer_access. Migration 032 appliquée manuellement via SQL Editor (voir section Problèmes ci-dessous dans WORKING_LOG). ⚠️ Le compte auth est ressorti cassé des conflits de 032 (pas d'identité auth → aucun courriel de réinitialisation envoyé) ; **migration 033** le répare. Une fois 033 appliquée : invitation depuis la page Équipe (bouton « Envoyer l'invitation » → resetPasswordForEmail), ou connexion directe avec le mdp temporaire si aucun n'existait.
 
 **Migrations**
 - 001 — schéma initial (11 tables, RLS, helpers SECURITY DEFINER)
@@ -113,6 +113,7 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - 030 — Compte de test TESTEUSE VIRGE (`jaffredovirginie@gmail.com`) — contractor CA, org Indépendante, has_producer_access=false. Permet à Virginie de tester la vue Prestataire sans toucher à son compte admin.
 - 031 — Refonte complète table `tasks` (existait depuis 001, inutilisée) : lot_id nullable, end_date → due_date, phase libre, status +validated, depends_on uuid[], +22 colonnes (project_id, milestone_id, priority, progress_pct, position, archived, audit…), 5 triggers, RLS ouverte (tout membre lit/écrit, DELETE admin). `comments.entity_type` +task, `log_comment_activity` mis à jour (7 entity types).
 - 032 — Cylia Rabhi (`rbhcelya@gmail.com`) admin JAXA CA + has_producer_access. Appliqué manuellement via SQL Editor (conflits sur compte pré-existant — voir WORKING_LOG 2026-05-20).
+- 033 — Répare le compte auth de Cylia cassé par les conflits de 032 (entrée `auth.users` orpheline supprimée, identité absente → `resetPasswordForEmail` n'envoyait aucun courriel). Idempotente : retrouve l'`id` réel via `public.users`, aligne `auth.users` (email + email confirmé + tokens non-NULL), crée l'`auth.identities` 'email' manquante, pose un mdp temporaire `Tmp!SILA2026#C` **seulement si aucun n'existe**. À appliquer via SQL Editor.
 
 **Hosting**
 - Auto-deploy GitHub → Netlify activé depuis 2026-04-28 (lien repo dans Netlify dashboard, branche `main`, ~12s de build par push)
