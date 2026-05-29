@@ -18,10 +18,20 @@ import MilestoneDetailModal from '../components/calendrier/MilestoneDetailModal.
 import GanttView from '../components/calendrier/GanttView.jsx'
 import ArchiveCheckbox from '../components/calendrier/ArchiveCheckbox.jsx'
 import EditDeliverableModal from '../components/livrables/EditDeliverableModal.jsx'
+import TaskDetailPanel from '../components/taches/TaskDetailPanel.jsx'
 import CommentBadge from '../components/comments/CommentBadge.jsx'
 import ModifiedBadge from '../components/audit/ModifiedBadge.jsx'
 import { useCommentCounts } from '../components/comments/useCommentCounts.js'
 import { MILESTONE_LABELS } from '../lib/auditLabels'
+
+// Sélection complète d'une tâche : TaskDetailPanel attend l'objet tâche complet
+// (mêmes embeds que la page Tâches / ex-Planning).
+const TASK_SELECT = `
+  *,
+  lot:lots(id, name, country),
+  assignee:users!tasks_assigned_to_fkey(id, full_name),
+  milestone:milestones!tasks_milestone_id_fkey(id, title)
+`
 
 export default function Calendrier() {
   const { projectId, accessLevel, loading: projectLoading } = useCurrentProject()
@@ -30,9 +40,13 @@ export default function Calendrier() {
   const [deliverables, setDeliverables] = useState([])
   const [funders, setFunders] = useState([])
   const [lots, setLots] = useState([])
+  const [tasks, setTasks] = useState([])
+  const [taskPeriods, setTaskPeriods] = useState([])
+  const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [filters, setFilters] = useState({ country: 'all', type: 'all', lot: 'all' })
+  const [filters, setFilters] = useState({ entryType: 'all', country: 'all', type: 'all', lot: 'all' })
+  const [detailTask, setDetailTask] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [detailMilestone, setDetailMilestone] = useState(null)
@@ -54,7 +68,7 @@ export default function Calendrier() {
     async function load() {
       setLoading(true)
       setError(null)
-      const [msRes, delRes, lotsRes, fundersRes] = await Promise.all([
+      const [msRes, delRes, lotsRes, fundersRes, tasksRes, periodsRes, membersRes] = await Promise.all([
         supabase
           .from('milestones')
           .select('id, project_id, lot_id, funder_id, title, start_date, end_date, type, country, notes, archived, archived_at, imported_value, last_modified_at, last_modified_by_user:users!milestones_last_modified_by_fkey(full_name)')
@@ -76,10 +90,19 @@ export default function Calendrier() {
           .select('id, name, country')
           .eq('project_id', projectId)
           .order('name', { ascending: true }),
+        // Tâches + leurs périodes (ex-page Planning, désormais fusionnée ici) +
+        // membres (pour le panneau de détail tâche).
+        supabase.from('tasks').select(TASK_SELECT).eq('project_id', projectId).order('position', { ascending: true }),
+        supabase
+          .from('task_periods')
+          .select('id, task_id, start_date, end_date, is_tentative, note, task:tasks!inner(project_id)')
+          .eq('task.project_id', projectId),
+        supabase.from('project_members').select('user:users(id, full_name)').eq('project_id', projectId),
       ])
 
       if (!alive) return
       const firstError = msRes.error ?? delRes.error ?? lotsRes.error ?? fundersRes.error
+        ?? tasksRes.error ?? periodsRes.error ?? membersRes.error
       if (firstError) {
         setError(firstError)
         setLoading(false)
@@ -89,6 +112,12 @@ export default function Calendrier() {
       setDeliverables(delRes.data ?? [])
       setLots(lotsRes.data ?? [])
       setFunders(fundersRes.data ?? [])
+      setTasks(tasksRes.data ?? [])
+      setTaskPeriods(periodsRes.data ?? [])
+      setMembers(
+        (membersRes.data ?? []).map(m => m.user).filter(Boolean)
+          .sort((a, b) => (a.full_name ?? '').localeCompare(b.full_name ?? ''))
+      )
       setLoading(false)
     }
 
@@ -136,17 +165,91 @@ export default function Calendrier() {
     )
   }, [milestones, deliverables, lots])
 
-  const filtered = useMemo(() => {
-    return items.filter(item => {
-      if (filters.country !== 'all' && item.country !== filters.country) return false
-      if (filters.type !== 'all' && item.type !== filters.type) return false
-      if (filters.lot !== 'all') {
-        if (filters.lot === 'transversal' && item.lotId) return false
-        if (filters.lot !== 'transversal' && item.lotId !== filters.lot) return false
+  // ─── Tâches → items Gantt (ex-page Planning, fusionnée ici) ─────────
+  // Périodes groupées par tâche.
+  const periodsByTask = useMemo(() => {
+    const map = new Map()
+    for (const p of taskPeriods) {
+      if (!map.has(p.task_id)) map.set(p.task_id, [])
+      map.get(p.task_id).push({
+        startDate: p.start_date,
+        endDate: p.end_date,
+        isTentative: p.is_tentative === true,
+        note: p.note,
+      })
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0))
+    }
+    return map
+  }, [taskPeriods])
+
+  // Adaptateur tâche → item Gantt. funderId toujours null (les tâches ne sont
+  // jamais rattachées à un bailleur) → buildFunderLanes les route vers la
+  // swimlane « Production interne — {country} ».
+  const taskItems = useMemo(() => {
+    const lotsById = Object.fromEntries(lots.map(l => [l.id, l]))
+    return tasks.filter(t => !t.archived).map(t => {
+      const ps = periodsByTask.get(t.id) ?? []
+      const lot = t.lot_id ? lotsById[t.lot_id] : null
+      // Règle pays (décisions Virginie) :
+      //   - tâche rattachée à un Tableau → pays DU LOT (règle #4)
+      //   - sinon pays de la tâche
+      //   - sinon 'FR' par défaut (point c — évite une lane « interne (null) »,
+      //     cohérent avec la décision DEV/PROMO transversal = FR)
+      const country = lot?.country ?? t.country ?? 'FR'
+      const base = {
+        id: `task-${t.id}`,
+        taskId: t.id,
+        source: 'task',
+        title: t.title,
+        lotId: t.lot_id ?? null,
+        funderId: null,
+        country,
+        responsable: t.assignee?.full_name ?? t.responsable_label ?? null,
+        status: t.status,
+        archived: false,
+        context: lot?.name ?? null,
       }
-      return true
-    })
-  }, [items, filters])
+      if (ps.length > 0) {
+        // Décisions (a) + (b) : N périodes = N barres. Si la tâche a AUSSI un
+        // due_date, on l'IGNORE (redondant avec les périodes — pas de doublon).
+        const startDate = ps[0].startDate
+        const endDate = ps.reduce((max, p) => {
+          const e = p.endDate ?? p.startDate
+          return e > max ? e : max
+        }, ps[0].endDate ?? ps[0].startDate)
+        return { ...base, startDate, endDate, periods: ps }
+      }
+      if (t.due_date) {
+        // Décision (b) : pas de période mais un due_date → losange ponctuel
+        // (startDate === endDate → rendu losange par GanttView).
+        return { ...base, startDate: t.due_date, endDate: t.due_date }
+      }
+      // Ni période ni due_date → non affichable dans le Gantt (visible dans Tâches).
+      return null
+    }).filter(Boolean)
+  }, [tasks, periodsByTask, lots])
+
+  // Prédicat de filtre partagé jalons / livrables / tâches.
+  //   - entryType (nouveau) : filtre par source (jalon / livrable / tâche).
+  //   - type (types de jalon) : s'applique UNIQUEMENT aux jalons (décision Virginie).
+  //   - country / lot : s'appliquent à tout.
+  function matchesFilters(item) {
+    if (filters.entryType !== 'all' && item.source !== filters.entryType) return false
+    if (filters.country !== 'all' && item.country !== filters.country) return false
+    if (filters.type !== 'all' && item.source === 'milestone' && item.type !== filters.type) return false
+    if (filters.lot !== 'all') {
+      if (filters.lot === 'transversal' && item.lotId) return false
+      if (filters.lot !== 'transversal' && item.lotId !== filters.lot) return false
+    }
+    return true
+  }
+
+  // Jalons + livrables filtrés (alimente Timeline + Archive — INCHANGÉ).
+  const filtered = useMemo(() => items.filter(matchesFilters), [items, filters])
+  // Tâches filtrées (alimentent le Gantt UNIQUEMENT, jamais la timeline verticale).
+  const filteredTasks = useMemo(() => taskItems.filter(matchesFilters), [taskItems, filters])
 
   // Split actif vs archivé. Le Gantt et la timeline mois ne montrent que
   // les items actifs. La section Archive en bas regroupe les jalons archivés.
@@ -154,6 +257,11 @@ export default function Calendrier() {
   // office côté Livrables, mais ils restent visibles dans le Calendrier).
   const activeItems = useMemo(() => filtered.filter(i => !i.archived), [filtered])
   const archivedItems = useMemo(() => filtered.filter(i => i.archived), [filtered])
+
+  // Items du Gantt = jalons+livrables actifs + tâches. Fork volontaire : les
+  // tâches ne doivent JAMAIS atterrir dans la timeline mensuelle ni l'archive
+  // (TimelineItem suppose un jalon/livrable typé). Décision Virginie #6 = Gantt seul.
+  const ganttItems = useMemo(() => [...activeItems, ...filteredTasks], [activeItems, filteredTasks])
 
   const grouped = useMemo(() => {
     const byMonth = new Map()
@@ -247,7 +355,7 @@ export default function Calendrier() {
       ) : (
         <>
           {/* ─── Vue Gantt (en haut) ───────────────────────────────────── */}
-          {activeItems.length > 0 ? (
+          {ganttItems.length > 0 ? (
             <section>
               <div className="hidden md:block space-y-3">
                 <button
@@ -262,7 +370,7 @@ export default function Calendrier() {
                 </button>
                 {showGantt ? (
                   <GanttView
-                    items={activeItems}
+                    items={ganttItems}
                     funders={funders}
                     onMilestoneClick={(milestoneId) => {
                       const m = milestones.find(x => x.id === milestoneId)
@@ -271,6 +379,10 @@ export default function Calendrier() {
                     onDeliverableClick={(deliverableId) => {
                       const d = deliverables.find(x => x.id === deliverableId)
                       if (d) setEditDeliverable(d)
+                    }}
+                    onTaskClick={(taskId) => {
+                      const t = tasks.find(x => x.id === taskId)
+                      if (t) setDetailTask(t)
                     }}
                     onToggleArchive={handleToggleArchive}
                   />
@@ -386,20 +498,47 @@ export default function Calendrier() {
         onSaved={() => { setEditDeliverable(null); setReloadKey(k => k + 1) }}
         onDeleted={() => { setEditDeliverable(null); setReloadKey(k => k + 1) }}
       />
+
+      <TaskDetailPanel
+        open={!!detailTask}
+        onClose={() => setDetailTask(null)}
+        task={detailTask}
+        projectId={projectId}
+        lots={lots}
+        members={members}
+        milestones={milestones.filter(m => !m.archived)}
+        allTasks={tasks.filter(t => !t.archived)}
+        onSaved={() => { setDetailTask(null); setReloadKey(k => k + 1) }}
+        onDeleted={() => { setDetailTask(null); setReloadKey(k => k + 1) }}
+      />
     </div>
   )
 }
 
 function Filters({ filters, onChange, lots }) {
+  // Le filtre « Type » (types de jalon) ne concerne que les jalons : on le
+  // désactive visuellement quand on isole les tâches ou les livrables.
+  const typeDisabled = filters.entryType === 'task' || filters.entryType === 'deliverable'
   return (
-    <div className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
+      <FilterSelect label="Type d'entrée" value={filters.entryType} onChange={(v) => onChange('entryType', v)}>
+        <option value="all">Tous</option>
+        <option value="milestone">Jalon</option>
+        <option value="deliverable">Livrable</option>
+        <option value="task">Tâche</option>
+      </FilterSelect>
       <FilterSelect label="Pays" value={filters.country} onChange={(v) => onChange('country', v)}>
         <option value="all">Tous</option>
         {COUNTRY_OPTIONS.map(c => (
           <option key={c} value={c}>{countryFlag(c)} {countryName(c)}</option>
         ))}
       </FilterSelect>
-      <FilterSelect label="Type" value={filters.type} onChange={(v) => onChange('type', v)}>
+      <FilterSelect
+        label="Type (jalon)"
+        value={filters.type}
+        onChange={(v) => onChange('type', v)}
+        disabled={typeDisabled}
+      >
         <option value="all">Tous</option>
         {MILESTONE_TYPE_OPTIONS.map(t => (
           <option key={t} value={t}>{milestoneType(t).label}</option>
@@ -414,14 +553,15 @@ function Filters({ filters, onChange, lots }) {
   )
 }
 
-function FilterSelect({ label, value, onChange, children }) {
+function FilterSelect({ label, value, onChange, children, disabled = false }) {
   return (
-    <label className="flex flex-col gap-1 text-xs">
+    <label className={`flex flex-col gap-1 text-xs ${disabled ? 'opacity-50' : ''}`}>
       <span className="font-medium text-slate-600">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+        disabled={disabled}
+        className="rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue disabled:cursor-not-allowed disabled:bg-slate-100"
       >
         {children}
       </select>

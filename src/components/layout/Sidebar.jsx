@@ -6,7 +6,6 @@ const NAV_ITEMS = [
   { to: '/production', label: 'Dashboard' },
   { to: '/calendrier', label: 'Calendrier' },
   { to: '/taches', label: 'Tâches' },
-  { to: '/planning', label: 'Planning' },
   { to: '/lots', label: 'Tableaux' },
   { to: '/documents', label: 'Documents' },
   { to: '/livrables', label: 'Livrables' },

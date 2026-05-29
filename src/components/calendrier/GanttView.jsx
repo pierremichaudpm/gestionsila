@@ -52,6 +52,15 @@ export default function GanttView({
   onToggleArchive,
 }) {
   const [laneFilter, setLaneFilter] = useState('all')
+  // Swimlanes repliées (par key). Vide au chargement = toutes ouvertes.
+  const [collapsedLanes, setCollapsedLanes] = useState(() => new Set())
+  function toggleLane(key) {
+    setCollapsedLanes(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
 
   // ─── Plage temporelle (tient compte des périodes) ─────────────────
   const range = useMemo(() => computeRange(items), [items])
@@ -183,6 +192,8 @@ export default function GanttView({
                 rangeStart={range.start}
                 scaleWidth={scaleWidth}
                 emptyLabel={groupBy === 'lot' ? 'Aucune entrée' : 'Aucun jalon'}
+                collapsed={collapsedLanes.has(lane.key)}
+                onToggleCollapse={() => toggleLane(lane.key)}
                 onMilestoneClick={onMilestoneClick}
                 onDeliverableClick={onDeliverableClick}
                 onTaskClick={onTaskClick}
@@ -298,26 +309,34 @@ function sortLaneItems(lane) {
 }
 
 // ─── Swimlane ───────────────────────────────────────────────────────
-function Swimlane({ lane, rangeStart, scaleWidth, emptyLabel = 'Aucune entrée', onMilestoneClick, onDeliverableClick, onTaskClick, onToggleArchive }) {
+function Swimlane({ lane, rangeStart, scaleWidth, emptyLabel = 'Aucune entrée', collapsed = false, onToggleCollapse, onMilestoneClick, onDeliverableClick, onTaskClick, onToggleArchive }) {
   return (
     <div className="border-b border-slate-200 last:border-b-0">
       <div className="flex" style={{ height: LANE_HEADER_H, background: 'var(--gantt-header)' }}>
-        <div className="flex shrink-0 items-center gap-2 border-r border-slate-200 px-4" style={{ width: LABEL_W }}>
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Déplier la swimlane' : 'Replier la swimlane'}
+          className="flex shrink-0 items-center gap-2 border-r border-slate-200 px-4 text-left transition hover:bg-slate-100"
+          style={{ width: LABEL_W }}
+        >
+          <span className="w-3 shrink-0 text-[11px] text-slate-400">{collapsed ? '▸' : '▾'}</span>
           <span className="inline-block h-[10px] w-[10px] shrink-0 rounded-sm" style={{ background: lane.color }} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[14px] font-semibold leading-tight text-slate-900">
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14px] font-semibold leading-tight text-slate-900">
               {lane.name}
-            </div>
-            <div className="truncate text-[10.5px] uppercase tracking-wide text-slate-500">
+            </span>
+            <span className="block truncate text-[10.5px] uppercase tracking-wide text-slate-500">
               {lane.country && !lane.isInternal ? `${countryFlag(lane.country)} · ` : ''}
               {lane.items.length} {lane.items.length === 1 ? 'entrée' : 'entrées'}
-            </div>
-          </div>
-        </div>
+            </span>
+          </span>
+        </button>
         <div style={{ width: scaleWidth }} />
       </div>
 
-      {lane.items.length === 0 ? (
+      {collapsed ? null : lane.items.length === 0 ? (
         <div className="flex items-stretch border-b border-slate-100 last:border-b-0" style={{ height: ROW_H }}>
           <div
             className="flex shrink-0 items-center border-r border-slate-200 pl-9 pr-4 text-[12px] italic text-slate-400"
