@@ -65,3 +65,27 @@ export function getFunderColor(funderId) {
   }
   return FALLBACK_PALETTE[Math.abs(h) % FALLBACK_PALETTE.length]
 }
+
+// ─── Couleurs par lot (sections du planning Gantt) ──────────────────
+// Décision D7 : on garde la palette éditoriale chaude (pas les pastels Excel).
+// DEV et PROMO ont des couleurs distinctes des 5 Tableaux. Clés = UUID
+// déterministes des lots (cf. seed 035). Lots hors seed → hash déterministe.
+const KNOWN_LOTS = {
+  '44444444-0000-0000-0000-000000000001': '#a8243a', // T-I  Le naufrage   — brick
+  '44444444-0000-0000-0000-000000000002': '#ac7a1f', // T-II Presqu'île    — ocre
+  '44444444-0000-0000-0000-000000000003': '#386053', // T-III Titanide     — sapin
+  '44444444-0000-0000-0000-000000000004': '#2a4468', // T-IV Phénomènes    — encre
+  '44444444-0000-0000-0000-000000000005': '#8b3a62', // T-V  Datacenter    — prune
+  '44444444-0000-0000-0000-000000000006': '#5a6b2f', // DEV transversal     — olive
+  '44444444-0000-0000-0000-000000000007': '#b5532e', // PROMOTION           — terracotta
+}
+
+export function getLotColor(lotId) {
+  if (!lotId) return INTERNAL_COLOR
+  if (KNOWN_LOTS[lotId]) return KNOWN_LOTS[lotId]
+  let h = 0
+  for (let i = 0; i < lotId.length; i++) {
+    h = (h * 31 + lotId.charCodeAt(i)) | 0
+  }
+  return FALLBACK_PALETTE[Math.abs(h) % FALLBACK_PALETTE.length]
+}

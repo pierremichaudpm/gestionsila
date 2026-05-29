@@ -1,5 +1,24 @@
 # WORKING_LOG — Gestion SILA
 
+## Session 2026-05-29/30 — Auth Cylia (033) + Planning Gantt (034/035 + composants)
+
+### Auth Cylia
+Pierre signale (contexte migration d'URL Netlify → `silagestion.netlify.app`) que Cylia ne reçoit aucun courriel de réinitialisation. Diagnostic : backend Supabase inchangé (`qqyrqiqnvsvzxqqukcjv`), donc mots de passe existants intacts — la migration d'URL n'est pas en cause. Vraie cause : compte auth de Cylia cassé par le nettoyage de 032 (entrée `auth.users` orpheline supprimée, pas d'identité `auth.identities`) → `resetPasswordForEmail` sur compte non résolvable = aucun courriel, aucune erreur (anti-énumération). **Migration 033** écrite (idempotente) + appliquée. Config URL Supabase vérifiée OK (Site URL + Redirect URLs sur la nouvelle URL). Commits poussés (716ce16, 0e4a6c6). NB : un copier-coller dans le SQL Editor a échoué sur les bannières `-- ====` (le `-- ` de la 1ʳᵉ ligne saute → « operator too long ») → bannières retirées des fichiers de migration.
+
+### Planning Gantt — intégration du planning de production SILA
+Brief Pierre : importer le planning Excel (76 tâches, 7 sections, sep 2025→oct 2026, multi-période hebdo) dans le module Calendrier/Gantt.
+
+**Décision d'archi (Option 2) : extension de l'existant, pas de couche parallèle.** Réutilise `lots` (= sections/Tableaux), `tasks` (031), `milestones`. Seul vrai manque comblé : la multi-période non contiguë → nouvelle table `task_periods`.
+
+- **034 (schéma)** : `task_periods` + RLS via tâche parente ; `tasks.responsable_label` (D4 — responsables sans compte) ; `lots.country` NULLABLE (D2 — DEV/PROMO transversal) ; index unique `(project_id, external_id)`.
+- **035 (seed)** : 7 lots (DEV + PROMO ajoutés, `country=NULL`), 76 tâches + ≈108 périodes (conversion S1–S4 → dates, voir en-tête du fichier), 6 jalons manquants. Idempotent.
+- **Décisions Virginie (2026-05-30)** : D2 = DEV/PROMO transversal ; D9 = période violette T-V sep→déc 2025 retirée ; Mostra (2–12 sept) = jalon distinct de la livraison Venise (24/08, déjà en 007).
+- **Front (Phases 3–5)** : `getLotColor` (palette éditoriale chaude, DEV olive / PROMO terracotta) ; `GanttView` étendu — prop `groupBy='lot'` + **multi-période** (N barres/ligne, hachuré si `is_tentative`) + `onTaskClick`, **mode `funder` 100 % préservé** (libellés Calendrier conditionnés au mode) ; page `/planning` (charge tasks + task_periods, groupé par lot, filtres section/responsable/pays, clic → `TaskDetailPanel` réutilisé) ; route + entrée sidebar « Planning » entre Tâches et Tableaux.
+
+**Reste à faire** : édition des périodes dans `TaskDetailPanel` (Phase suivante — les périodes du seed sont calibrées, on verra à l'usage).
+
+---
+
 ## Session 2026-05-20 — Phase A : module Tâches Kanban + Cylia Rabhi admin
 
 ### Objectif

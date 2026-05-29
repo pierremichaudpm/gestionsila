@@ -114,6 +114,8 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - 031 — Refonte complète table `tasks` (existait depuis 001, inutilisée) : lot_id nullable, end_date → due_date, phase libre, status +validated, depends_on uuid[], +22 colonnes (project_id, milestone_id, priority, progress_pct, position, archived, audit…), 5 triggers, RLS ouverte (tout membre lit/écrit, DELETE admin). `comments.entity_type` +task, `log_comment_activity` mis à jour (7 entity types).
 - 032 — Cylia Rabhi (`rbhcelya@gmail.com`) admin JAXA CA + has_producer_access. Appliqué manuellement via SQL Editor (conflits sur compte pré-existant — voir WORKING_LOG 2026-05-20).
 - 033 — Répare le compte auth de Cylia cassé par les conflits de 032 (entrée `auth.users` orpheline supprimée, identité absente → `resetPasswordForEmail` n'envoyait aucun courriel). Idempotente : retrouve l'`id` réel via `public.users`, aligne `auth.users` (email + email confirmé + tokens non-NULL), crée l'`auth.identities` 'email' manquante, pose un mdp temporaire `Tmp!SILA2026#C` **seulement si aucun n'existe**. À appliquer via SQL Editor.
+- 034 — Planning Gantt (schéma) : table `task_periods` (0..N périodes par tâche : start_date, end_date nullable=ponctuel, is_tentative, note) + RLS collaborative (via tâche parente) ; `tasks.responsable_label` (fallback texte pour responsables sans compte) ; **`lots.country` rendu NULLABLE** (NULL = section transversale, pour DEV/PROMO) ; index unique `(project_id, external_id)` (clé d'idempotence du seed).
+- 035 — Seed planning : 7 lots (les 5 Tableaux + **Dev transversal** + **Promotion** en `country=NULL`), **76 tâches** + ≈108 périodes (conversion S1–S4 → dates), 6 jalons manquants (SXSW, deadline builds 01/07, Résidence Grenier à Sel, deadline .apk Venise, **Mostra de Venise** distincte de la livraison 24/08, Chroniques). Idempotent (upsert UUID + purge/réinsert périodes). Décisions Virginie : DEV/PROMO transversal, période violette T-V retirée.
 
 **Hosting**
 - Auto-deploy GitHub → Netlify activé depuis 2026-04-28 (lien repo dans Netlify dashboard, branche `main`, ~12s de build par push)
@@ -122,7 +124,7 @@ Outil de gestion de production pour coproductions internationales. Première ins
 - Sidebar 320px navy avec 3 logos circulaires 88px (Poulpe Bleu en `object-cover`, autres en `object-contain` padding 10px), titre "SILA / Héroïnes Arctiques" sur 2 lignes en `text-2xl bold`
 - Fond crème vintage `#f1e2bc` avec grain SVG (`feTurbulence baseFrequency=0.7`, brun à 28% d'alpha)
 - Footer "Propulsé par Studio Micho · Jaxa" sur toutes les pages protégées
-- Sidebar nav principale : Dashboard / Calendrier / Tâches / Tableaux / Documents / Livrables / Équipe — Budget retiré
+- Sidebar nav principale : Dashboard / Calendrier / Tâches / Planning / Tableaux / Documents / Livrables / Équipe — Budget retiré
 - Sidebar Espace Producteurs (visible si `has_producer_access`) : Assurances / Légal / Devis initiaux / Budget — avec icône cadenas
 
 **Données**
@@ -215,7 +217,10 @@ id (uuid PK), project_id (FK), org_id (FK), user_id (FK), access_level (admin|co
 id (uuid PK), project_id (FK), org_id (FK), name, director, country, status (prototype|in_production|post_production|delivered), sort_order
 
 ### tasks (refondu en 031)
-id (uuid PK), project_id (FK), lot_id (FK nullable), assigned_to (FK user nullable), milestone_id (FK nullable), external_id (text nullable), title, description, phase (text libre nullable), acte (text nullable), discipline (text nullable), status (todo|in_progress|blocked|done|validated), priority (p0|p1|p2|p3 nullable), progress_pct (int 0-100), estim_hours, actual_hours, due_date (date nullable), deliverable (text nullable), validation_notes, notes, country, position (numeric), depends_on (uuid[] default []), archived (bool), archived_at, archived_by (FK user), created_by (FK user), created_at, updated_at, last_modified_by (FK user), last_modified_at. RLS ouverte : tout membre peut lire/créer/modifier, DELETE admin only.
+id (uuid PK), project_id (FK), lot_id (FK nullable), assigned_to (FK user nullable), milestone_id (FK nullable), external_id (text nullable), title, description, phase (text libre nullable), acte (text nullable), discipline (text nullable), status (todo|in_progress|blocked|done|validated), priority (p0|p1|p2|p3 nullable), progress_pct (int 0-100), estim_hours, actual_hours, due_date (date nullable), deliverable (text nullable), validation_notes, notes, country, position (numeric), depends_on (uuid[] default []), responsable_label (text nullable, depuis 034 — responsable sans compte), archived (bool), archived_at, archived_by (FK user), created_by (FK user), created_at, updated_at, last_modified_by (FK user), last_modified_at. RLS ouverte : tout membre peut lire/créer/modifier, DELETE admin only.
+
+### task_periods (depuis 034)
+id (uuid PK), task_id (FK tasks ON DELETE CASCADE), start_date (date), end_date (date nullable — NULL = période ponctuelle), is_tentative (bool — « à confirmer », rendu hachuré dans le Gantt), note (text — annotation source), created_at. Une tâche du planning a 0..N périodes (multi-période non contiguë, ex. « Push build EN » sur plusieurs mois disjoints). RLS via la tâche parente (lecture/écriture tout membre). Alimentée par le seed 035, affichée dans la page `/planning` (Gantt `groupBy='lot'`).
 
 ### documents
 id (uuid PK), project_id (FK), lot_id (FK, nullable), uploaded_by (FK user), title, category (contract|scenario|artistic_dossier|report|technical_deliverable|invoice|reference), folder (techno|creation|texte|divers, default 'divers'), country, version (int), validation_status (draft|pending|approved|archived), drive_url, drive_file_id, created_at, updated_at + colonnes audit (imported, imported_value, last_modified_by, last_modified_at)

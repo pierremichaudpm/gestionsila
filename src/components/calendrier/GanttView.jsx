@@ -1,26 +1,30 @@
 import { useMemo, useState } from 'react'
 import { countryFlag, milestoneType } from '../../lib/format'
-import { getFunderColor, getInternalColor, internalLabel } from './ganttColors'
+import { getFunderColor, getInternalColor, getLotColor, internalLabel } from './ganttColors'
 import ArchiveCheckbox from './ArchiveCheckbox.jsx'
 
-// Vue Gantt complémentaire de la timeline verticale du Calendrier.
-// Lecture seule : pas de drag, pas d'édition. Clic sur un item ouvre la modal
-// de détail correspondante (milestone → MilestoneDetailModal ;
-// deliverable → EditDeliverableModal), via les callbacks passés en props.
+// Vue Gantt — deux modes de regroupement (prop groupBy) :
+//   'funder' (défaut) — Calendrier global : jalons + livrables, swimlanes par
+//                       bailleur + « Production interne » par pays. Comportement
+//                       d'origine, inchangé.
+//   'lot'    — Planning : tâches groupées par tableau (lot), une swimlane par
+//                       lot. Les tâches portent plusieurs périodes (item.periods),
+//                       rendues comme N barres sur une même ligne. Périodes
+//                       « à confirmer » (isTentative) en hachuré.
 //
-// Inspiration visuelle : palette éditoriale chaude (papier/encre), proche du
-// fichier de référence cibles_rouges_gantt_2.html. Pas de la palette navy
-// applicative, qui est trop monotone à l'échelle du Gantt.
+// Lecture seule : clic sur un item → callback selon sa source
+// (milestone → onMilestoneClick · deliverable → onDeliverableClick ·
+//  task → onTaskClick).
 
 const DAY_W = 18              // px par jour (zoom standard, fixe pour MVP)
 const LABEL_W = 240           // px de la colonne fixe à gauche
 const ROW_H = 40              // px par ligne d'item
 const LANE_HEADER_H = 44      // px du header de swimlane
 
-// Préfixe des swimlanes "Production interne". Une lane par pays + une
-// éventuelle lane fallback pour les jalons internes sans country.
+// Préfixe des swimlanes "Production interne" (mode funder). Une lane par pays.
 const INTERNAL_PREFIX = '__internal__'
 const internalKey = (country) => `${INTERNAL_PREFIX}:${country ?? 'null'}`
+const NO_LOT_KEY = '__no_lot__'
 
 // Ordre déterministe des pays internes : CA → FR → LU → autres.
 const INTERNAL_COUNTRY_ORDER = ['CA', 'FR', 'LU']
@@ -29,84 +33,40 @@ function internalCountryRank(country) {
   return i === -1 ? 99 : i
 }
 
+// Segments d'un item : ses périodes si présentes (tâches), sinon une période
+// unique reconstruite depuis startDate/endDate (jalons, livrables).
+function itemSegments(item) {
+  if (item.periods && item.periods.length) return item.periods
+  return [{ startDate: item.startDate, endDate: item.endDate, isTentative: false, note: item.notes }]
+}
+
 export default function GanttView({
   items,
-  funders,
+  funders = [],
+  lots = [],
+  groupBy = 'funder',
+  laneHeaderLabel,
   onMilestoneClick,
   onDeliverableClick,
+  onTaskClick,
   onToggleArchive,
 }) {
-  const [funderFilter, setFunderFilter] = useState('all')
+  const [laneFilter, setLaneFilter] = useState('all')
 
-  // ─── Plage temporelle ─────────────────────────────────────────────
+  // ─── Plage temporelle (tient compte des périodes) ─────────────────
   const range = useMemo(() => computeRange(items), [items])
 
   // ─── Regroupement par swimlane ────────────────────────────────────
-  // Production interne : une lane par pays. Les 3 lanes (CA / FR / LU)
-  // sont toujours présentes même vides — Virginie veut voir la structure
-  // des 3 pays internes en permanence, pas seulement quand il y a des
-  // jalons (sinon une absence de jalon LU faisait disparaître la lane LU).
-  // Bailleurs : une lane par funder_id, n'apparaît que s'il a des items.
-  const lanes = useMemo(() => {
-    const map = new Map() // key -> { key, funder, items[], color, name, country, isInternal }
+  const lanes = useMemo(
+    () => (groupBy === 'lot'
+      ? buildLotLanes(items, lots)
+      : buildFunderLanes(items, funders)),
+    [items, funders, lots, groupBy]
+  )
 
-    // Pré-amorçage des 3 lanes internes (vides par défaut).
-    for (const country of INTERNAL_COUNTRY_ORDER) {
-      const key = internalKey(country)
-      map.set(key, {
-        key,
-        funder: null,
-        items: [],
-        color: getInternalColor(country),
-        name: internalLabel(country),
-        country,
-        isInternal: true,
-      })
-    }
-
-    for (const item of items) {
-      const isInternal = !item.funderId
-      const key = isInternal ? internalKey(item.country) : item.funderId
-      if (!map.has(key)) {
-        const funder = !isInternal
-          ? funders.find(f => f.id === item.funderId) ?? null
-          : null
-        map.set(key, {
-          key,
-          funder,
-          items: [],
-          color: isInternal ? getInternalColor(item.country) : getFunderColor(item.funderId),
-          name: isInternal ? internalLabel(item.country) : (funder?.name ?? internalLabel(null)),
-          country: isInternal ? item.country : (funder?.country ?? null),
-          isInternal,
-        })
-      }
-      map.get(key).items.push(item)
-    }
-    // Tri des items intra-lane par date de début
-    for (const lane of map.values()) {
-      lane.items.sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0))
-    }
-    // Ordre des lanes :
-    //   1. Production interne en haut, par pays (CA → FR → LU → autres)
-    //   2. Bailleurs en dessous, A→Z
-    return Array.from(map.values()).sort((a, b) => {
-      if (a.isInternal && !b.isInternal) return -1
-      if (!a.isInternal && b.isInternal) return 1
-      if (a.isInternal && b.isInternal) {
-        const rA = internalCountryRank(a.country)
-        const rB = internalCountryRank(b.country)
-        if (rA !== rB) return rA - rB
-        return (a.country ?? '').localeCompare(b.country ?? '')
-      }
-      return a.name.localeCompare(b.name)
-    })
-  }, [items, funders])
-
-  // ─── Légende : toutes les lanes présentes ─────────────────────────
-  const visibleLanes = funderFilter === 'all'
+  const visibleLanes = laneFilter === 'all'
     ? lanes
-    : lanes.filter(l => l.key === funderFilter)
+    : lanes.filter(l => l.key === laneFilter)
 
   if (lanes.length === 0) {
     return (
@@ -125,13 +85,15 @@ export default function GanttView({
       ? daysBetween(range.start, today) * DAY_W
       : null
 
+  const headerLabel = laneHeaderLabel ?? (groupBy === 'lot' ? 'Tableaux / Tâches' : 'Bailleurs / Livrables')
+
   return (
     <section className="space-y-3">
       {/* Légende cliquable filtrante */}
       <div className="flex flex-wrap items-center gap-2">
         <FilterChip
-          active={funderFilter === 'all'}
-          onClick={() => setFunderFilter('all')}
+          active={laneFilter === 'all'}
+          onClick={() => setLaneFilter('all')}
           color="#5a5248"
           label="Tout"
           count={items.length}
@@ -139,18 +101,18 @@ export default function GanttView({
         {lanes.map(lane => (
           <FilterChip
             key={lane.key}
-            active={funderFilter === lane.key}
-            onClick={() => setFunderFilter(funderFilter === lane.key ? 'all' : lane.key)}
+            active={laneFilter === lane.key}
+            onClick={() => setLaneFilter(laneFilter === lane.key ? 'all' : lane.key)}
             color={lane.color}
             label={lane.name}
             country={lane.isInternal ? null : lane.country}
             count={lane.items.length}
           />
         ))}
-        {funderFilter !== 'all' ? (
+        {laneFilter !== 'all' ? (
           <button
             type="button"
-            onClick={() => setFunderFilter('all')}
+            onClick={() => setLaneFilter('all')}
             className="ml-auto text-xs font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
           >
             Réinitialiser
@@ -167,7 +129,7 @@ export default function GanttView({
               className="flex shrink-0 items-center bg-[color:var(--gantt-header)] px-4 text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500"
               style={{ width: LABEL_W }}
             >
-              Bailleurs / Livrables
+              {headerLabel}
             </div>
             <div className="relative" style={{ width: scaleWidth, height: 52 }}>
               {/* Bandeau mois */}
@@ -220,31 +182,21 @@ export default function GanttView({
                 lane={lane}
                 rangeStart={range.start}
                 scaleWidth={scaleWidth}
+                emptyLabel={groupBy === 'lot' ? 'Aucune entrée' : 'Aucun jalon'}
                 onMilestoneClick={onMilestoneClick}
                 onDeliverableClick={onDeliverableClick}
+                onTaskClick={onTaskClick}
                 onToggleArchive={onToggleArchive}
               />
             ))}
             {todayX !== null ? (
               <div
                 className="pointer-events-none absolute top-0 z-10"
-                style={{
-                  left: LABEL_W + todayX,
-                  bottom: 0,
-                  width: 1,
-                  background: '#a8243a',
-                }}
+                style={{ left: LABEL_W + todayX, bottom: 0, width: 1, background: '#a8243a' }}
               >
                 <div
                   className="absolute"
-                  style={{
-                    top: -3,
-                    left: -3,
-                    width: 7,
-                    height: 7,
-                    borderRadius: '50%',
-                    background: '#a8243a',
-                  }}
+                  style={{ top: -3, left: -3, width: 7, height: 7, borderRadius: '50%', background: '#a8243a' }}
                 />
               </div>
             ) : null}
@@ -253,30 +205,105 @@ export default function GanttView({
       </div>
 
       <p className="text-[11px] text-slate-500">
-        <span className="inline-block h-2 w-4 rounded-sm" style={{ background: '#5a5248' }} /> Barre = jalon avec date de début et de fin
+        <span className="inline-block h-2 w-4 rounded-sm" style={{ background: '#5a5248' }} />{' '}
+        {groupBy === 'lot' ? 'Barre = période avec début et fin' : 'Barre = jalon avec date de début et de fin'}
         {'   ·   '}
-        <span className="inline-block h-2 w-2 rotate-45 align-middle" style={{ background: '#5a5248' }} /> Losange = date ponctuelle (jalon ou livrable)
+        <span className="inline-block h-2 w-2 rotate-45 align-middle" style={{ background: '#5a5248' }} />{' '}
+        {groupBy === 'lot' ? 'Losange = date ponctuelle' : 'Losange = date ponctuelle (jalon ou livrable)'}
         {'   ·   '}
-        Trait rouge = aujourd'hui · Hachures = livrable soumis ou validé
+        Trait rouge = aujourd'hui · Hachures = {groupBy === 'lot' ? 'période à confirmer' : 'livrable soumis ou validé'}
       </p>
     </section>
   )
 }
 
+// ─── Construction des swimlanes — mode bailleur (inchangé) ──────────
+function buildFunderLanes(items, funders) {
+  const map = new Map()
+  // Pré-amorçage des 3 lanes internes (toujours présentes même vides).
+  for (const country of INTERNAL_COUNTRY_ORDER) {
+    const key = internalKey(country)
+    map.set(key, {
+      key, funder: null, items: [],
+      color: getInternalColor(country), name: internalLabel(country),
+      country, isInternal: true,
+    })
+  }
+  for (const item of items) {
+    const isInternal = !item.funderId
+    const key = isInternal ? internalKey(item.country) : item.funderId
+    if (!map.has(key)) {
+      const funder = !isInternal ? funders.find(f => f.id === item.funderId) ?? null : null
+      map.set(key, {
+        key, funder, items: [],
+        color: isInternal ? getInternalColor(item.country) : getFunderColor(item.funderId),
+        name: isInternal ? internalLabel(item.country) : (funder?.name ?? internalLabel(null)),
+        country: isInternal ? item.country : (funder?.country ?? null),
+        isInternal,
+      })
+    }
+    map.get(key).items.push(item)
+  }
+  for (const lane of map.values()) sortLaneItems(lane)
+  return Array.from(map.values()).sort((a, b) => {
+    if (a.isInternal && !b.isInternal) return -1
+    if (!a.isInternal && b.isInternal) return 1
+    if (a.isInternal && b.isInternal) {
+      const rA = internalCountryRank(a.country)
+      const rB = internalCountryRank(b.country)
+      if (rA !== rB) return rA - rB
+      return (a.country ?? '').localeCompare(b.country ?? '')
+    }
+    return a.name.localeCompare(b.name)
+  })
+}
+
+// ─── Construction des swimlanes — mode lot (planning) ───────────────
+// Une lane par lot, dans l'ordre fourni (sort_order). Toutes les sections
+// présentes même vides (structure permanente du planning). Les tâches sans
+// lot tombent dans une lane « Sans tableau » en fin de liste.
+function buildLotLanes(items, lots) {
+  const map = new Map()
+  for (const lot of lots) {
+    map.set(lot.id, {
+      key: lot.id, items: [],
+      color: getLotColor(lot.id), name: lot.name,
+      country: lot.country ?? null, isInternal: false,
+    })
+  }
+  for (const item of items) {
+    const key = item.lotId ?? NO_LOT_KEY
+    if (!map.has(key)) {
+      map.set(key, {
+        key, items: [],
+        color: key === NO_LOT_KEY ? getInternalColor(null) : getLotColor(item.lotId),
+        name: key === NO_LOT_KEY ? 'Sans tableau' : (item.context ?? 'Tableau'),
+        country: item.country ?? null, isInternal: false,
+      })
+    }
+    map.get(key).items.push(item)
+  }
+  for (const lane of map.values()) sortLaneItems(lane)
+  // Ordre : on respecte l'ordre des lots fournis, puis « Sans tableau » à la fin.
+  const order = new Map(lots.map((l, i) => [l.id, i]))
+  return Array.from(map.values()).sort((a, b) => {
+    const rA = a.key === NO_LOT_KEY ? 9999 : (order.get(a.key) ?? 9998)
+    const rB = b.key === NO_LOT_KEY ? 9999 : (order.get(b.key) ?? 9998)
+    return rA - rB
+  })
+}
+
+function sortLaneItems(lane) {
+  lane.items.sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0))
+}
+
 // ─── Swimlane ───────────────────────────────────────────────────────
-function Swimlane({ lane, rangeStart, scaleWidth, onMilestoneClick, onDeliverableClick, onToggleArchive }) {
+function Swimlane({ lane, rangeStart, scaleWidth, emptyLabel = 'Aucune entrée', onMilestoneClick, onDeliverableClick, onTaskClick, onToggleArchive }) {
   return (
     <div className="border-b border-slate-200 last:border-b-0">
-      {/* Header swimlane */}
       <div className="flex" style={{ height: LANE_HEADER_H, background: 'var(--gantt-header)' }}>
-        <div
-          className="flex shrink-0 items-center gap-2 border-r border-slate-200 px-4"
-          style={{ width: LABEL_W }}
-        >
-          <span
-            className="inline-block h-[10px] w-[10px] shrink-0 rounded-sm"
-            style={{ background: lane.color }}
-          />
+        <div className="flex shrink-0 items-center gap-2 border-r border-slate-200 px-4" style={{ width: LABEL_W }}>
+          <span className="inline-block h-[10px] w-[10px] shrink-0 rounded-sm" style={{ background: lane.color }} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[14px] font-semibold leading-tight text-slate-900">
               {lane.name}
@@ -290,19 +317,13 @@ function Swimlane({ lane, rangeStart, scaleWidth, onMilestoneClick, onDeliverabl
         <div style={{ width: scaleWidth }} />
       </div>
 
-      {/* Rangs d'items — placeholder italique si la lane est vide
-          (utilisé pour les 3 lanes internes CA / FR / LU toujours
-          affichées même sans jalon). */}
       {lane.items.length === 0 ? (
-        <div
-          className="flex items-stretch border-b border-slate-100 last:border-b-0"
-          style={{ height: ROW_H }}
-        >
+        <div className="flex items-stretch border-b border-slate-100 last:border-b-0" style={{ height: ROW_H }}>
           <div
             className="flex shrink-0 items-center border-r border-slate-200 pl-9 pr-4 text-[12px] italic text-slate-400"
             style={{ width: LABEL_W }}
           >
-            Aucun jalon
+            {emptyLabel}
           </div>
           <div style={{ width: scaleWidth }} />
         </div>
@@ -316,6 +337,7 @@ function Swimlane({ lane, rangeStart, scaleWidth, onMilestoneClick, onDeliverabl
             scaleWidth={scaleWidth}
             onMilestoneClick={onMilestoneClick}
             onDeliverableClick={onDeliverableClick}
+            onTaskClick={onTaskClick}
             onToggleArchive={onToggleArchive}
           />
         ))
@@ -324,33 +346,21 @@ function Swimlane({ lane, rangeStart, scaleWidth, onMilestoneClick, onDeliverabl
   )
 }
 
-// ─── Ligne d'item (barre ou losange) ────────────────────────────────
-function ItemRow({ item, color, rangeStart, scaleWidth, onMilestoneClick, onDeliverableClick, onToggleArchive }) {
+// ─── Ligne d'item (1..N barres / losanges selon les périodes) ───────
+function ItemRow({ item, color, rangeStart, scaleWidth, onMilestoneClick, onDeliverableClick, onTaskClick, onToggleArchive }) {
   const isMilestone = item.source === 'milestone'
   const milestoneId = isMilestone ? item.id.replace(/^milestone-/, '') : null
-  const isPunctual = !item.endDate || item.startDate === item.endDate
-  const start = parseDate(item.startDate)
-  const end = item.endDate ? parseDate(item.endDate) : start
-  const offsetDays = daysBetween(rangeStart, start)
-  const durationDays = daysBetween(start, end) + 1
 
-  // Visuels par statut deliverable
-  const isDelivered = item.source === 'deliverable'
-  const status = isDelivered ? item.status : null
-  const dimmed = status === 'submitted' || status === 'validated'
-  const hatched = dimmed
+  // Dimming au niveau item (livrable soumis/validé) — mode funder.
+  const itemDimmed = item.source === 'deliverable' && (item.status === 'submitted' || item.status === 'validated')
 
   function handleClick() {
-    if (item.source === 'milestone') {
-      const id = item.id.replace(/^milestone-/, '')
-      onMilestoneClick?.(id)
-    } else if (item.source === 'deliverable') {
-      const id = item.id.replace(/^deliverable-/, '')
-      onDeliverableClick?.(id)
-    }
+    if (item.source === 'milestone') onMilestoneClick?.(item.id.replace(/^milestone-/, ''))
+    else if (item.source === 'deliverable') onDeliverableClick?.(item.id.replace(/^deliverable-/, ''))
+    else if (item.source === 'task') onTaskClick?.(item.taskId ?? item.id.replace(/^task-/, ''))
   }
 
-  const tooltip = buildTooltip(item)
+  const segments = itemSegments(item)
 
   return (
     <div className="flex items-stretch border-b border-slate-100 last:border-b-0" style={{ height: ROW_H }}>
@@ -360,61 +370,86 @@ function ItemRow({ item, color, rangeStart, scaleWidth, onMilestoneClick, onDeli
       >
         <span className="flex-1 truncate">{item.title}</span>
         {isMilestone && onToggleArchive ? (
-          <ArchiveCheckbox
-            checked={item.archived}
-            onChange={(next) => onToggleArchive(milestoneId, next)}
-          />
+          <ArchiveCheckbox checked={item.archived} onChange={(next) => onToggleArchive(milestoneId, next)} />
         ) : null}
       </div>
       <div className="relative" style={{ width: scaleWidth }}>
-        {isPunctual ? (
-          <button
-            type="button"
-            title={tooltip}
+        {segments.map((seg, idx) => (
+          <Segment
+            key={idx}
+            seg={seg}
+            color={color}
+            rangeStart={rangeStart}
+            itemDimmed={itemDimmed}
+            label={item.title}
+            tooltip={buildTooltip(item, seg)}
             onClick={handleClick}
-            className="absolute z-[1] cursor-pointer transition-transform hover:scale-110"
-            style={{
-              left: offsetDays * DAY_W + DAY_W / 2 - 7,
-              top: ROW_H / 2 - 7,
-              width: 14,
-              height: 14,
-              background: color,
-              opacity: dimmed ? 0.55 : 1,
-              transform: 'rotate(45deg)',
-              border: '1px solid rgba(255,255,255,0.4)',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
-              padding: 0,
-            }}
-            aria-label={item.title}
           />
-        ) : (
-          <button
-            type="button"
-            title={tooltip}
-            onClick={handleClick}
-            className="absolute flex cursor-pointer items-center overflow-hidden rounded-[4px] px-2 text-[12px] font-medium text-white transition-shadow hover:shadow-md"
-            style={{
-              left: offsetDays * DAY_W,
-              top: 6,
-              height: ROW_H - 12,
-              width: Math.max(DAY_W, durationDays * DAY_W),
-              background: color,
-              opacity: dimmed ? 0.55 : 1,
-              backgroundImage: hatched
-                ? 'linear-gradient(135deg, rgba(255,255,255,0.18) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.18) 75%, transparent 75%)'
-                : undefined,
-              backgroundSize: hatched ? '8px 8px' : undefined,
-              boxShadow:
-                'inset 0 0 0 1px rgba(255,255,255,0.08), 0 1px 2px rgba(0,0,0,0.06)',
-              border: 'none',
-              textAlign: 'left',
-            }}
-          >
-            <span className="truncate">{item.title}</span>
-          </button>
-        )}
+        ))}
       </div>
     </div>
+  )
+}
+
+// ─── Une barre (ou losange) pour une période ────────────────────────
+function Segment({ seg, color, rangeStart, itemDimmed, label, tooltip, onClick }) {
+  if (!seg.startDate) return null
+  const isPunctual = !seg.endDate || seg.startDate === seg.endDate
+  const start = parseDate(seg.startDate)
+  const end = seg.endDate ? parseDate(seg.endDate) : start
+  const offsetDays = daysBetween(rangeStart, start)
+  const durationDays = daysBetween(start, end) + 1
+
+  const dimmed = itemDimmed || seg.isTentative
+  const hatched = dimmed
+
+  if (isPunctual) {
+    return (
+      <button
+        type="button"
+        title={tooltip}
+        onClick={onClick}
+        className="absolute z-[1] cursor-pointer transition-transform hover:scale-110"
+        style={{
+          left: offsetDays * DAY_W + DAY_W / 2 - 7,
+          top: ROW_H / 2 - 7,
+          width: 14, height: 14,
+          background: color,
+          opacity: dimmed ? 0.55 : 1,
+          transform: 'rotate(45deg)',
+          border: '1px solid rgba(255,255,255,0.4)',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+          padding: 0,
+        }}
+        aria-label={label}
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      title={tooltip}
+      onClick={onClick}
+      className="absolute flex cursor-pointer items-center overflow-hidden rounded-[4px] px-2 text-[12px] font-medium text-white transition-shadow hover:shadow-md"
+      style={{
+        left: offsetDays * DAY_W,
+        top: 6,
+        height: ROW_H - 12,
+        width: Math.max(DAY_W, durationDays * DAY_W),
+        background: color,
+        opacity: dimmed ? 0.55 : 1,
+        backgroundImage: hatched
+          ? 'linear-gradient(135deg, rgba(255,255,255,0.18) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.18) 75%, transparent 75%)'
+          : undefined,
+        backgroundSize: hatched ? '8px 8px' : undefined,
+        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08), 0 1px 2px rgba(0,0,0,0.06)',
+        border: 'none',
+        textAlign: 'left',
+      }}
+    >
+      <span className="truncate">{label}</span>
+    </button>
   )
 }
 
@@ -431,10 +466,7 @@ function FilterChip({ active, onClick, color, label, country, count }) {
           : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500',
       ].join(' ')}
     >
-      <span
-        className="inline-block h-2 w-2 rounded-full"
-        style={{ background: color }}
-      />
+      <span className="inline-block h-2 w-2 rounded-full" style={{ background: color }} />
       <span>{country ? `${countryFlag(country)} ` : ''}{label}</span>
       <span className={active ? 'text-white/70' : 'text-slate-400'}>· {count}</span>
     </button>
@@ -474,16 +506,18 @@ function computeRange(items) {
   let minStart = null
   let maxEnd = null
   for (const item of items) {
-    const s = parseDate(item.startDate)
-    const e = item.endDate ? parseDate(item.endDate) : s
-    if (!minStart || s < minStart) minStart = s
-    if (!maxEnd || e > maxEnd) maxEnd = e
+    for (const seg of itemSegments(item)) {
+      if (!seg.startDate) continue
+      const s = parseDate(seg.startDate)
+      const e = seg.endDate ? parseDate(seg.endDate) : s
+      if (!minStart || s < minStart) minStart = s
+      if (!maxEnd || e > maxEnd) maxEnd = e
+    }
   }
-  // Borne basse : le plus proche entre 1er du mois courant et minStart
+  if (!minStart) return { start: monthStart, end: addDays(monthStart, 365) }
   const start = minStart < monthStart
     ? new Date(minStart.getFullYear(), minStart.getMonth(), 1)
     : monthStart
-  // Borne haute : maxEnd + 6 mois (fin de mois)
   const endTarget = new Date(maxEnd.getFullYear(), maxEnd.getMonth() + 7, 0)
   return { start, end: endTarget }
 }
@@ -497,28 +531,23 @@ function monthSegments(start, end) {
     const segStart = cursor < start ? start : cursor
     const segEnd = next > end ? end : addDays(next, -1)
     const days = daysBetween(segStart, segEnd) + 1
-    out.push({
-      label: `${labels[cursor.getMonth()]} ${cursor.getFullYear()}`,
-      days,
-    })
+    out.push({ label: `${labels[cursor.getMonth()]} ${cursor.getFullYear()}`, days })
     cursor = next
   }
   return out
 }
 
-function buildTooltip(item) {
+function buildTooltip(item, seg) {
   const parts = [item.title]
-  if (item.endDate && item.endDate !== item.startDate) {
-    parts.push(`${item.startDate} → ${item.endDate}`)
-  } else {
-    parts.push(item.startDate)
+  if (seg?.startDate) {
+    if (seg.endDate && seg.endDate !== seg.startDate) parts.push(`${seg.startDate} → ${seg.endDate}`)
+    else parts.push(seg.startDate)
   }
-  if (item.source === 'milestone' && item.type) {
-    parts.push(milestoneType(item.type).label)
-  }
-  if (item.source === 'deliverable' && item.status) {
-    parts.push(`Statut : ${item.status}`)
-  }
-  if (item.notes) parts.push(item.notes)
+  if (item.source === 'milestone' && item.type) parts.push(milestoneType(item.type).label)
+  if (item.source === 'deliverable' && item.status) parts.push(`Statut : ${item.status}`)
+  if (item.source === 'task' && item.responsable) parts.push(`Resp. : ${item.responsable}`)
+  if (seg?.isTentative) parts.push('À confirmer')
+  const note = seg?.note ?? (item.periods ? null : item.notes)
+  if (note) parts.push(note)
   return parts.join('\n')
 }
