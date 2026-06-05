@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -6,9 +6,20 @@ import {
   TouchSensor,
   useSensor,
   useSensors,
-  closestCorners,
+  pointerWithin,
+  rectIntersection,
   useDroppable,
 } from '@dnd-kit/core'
+
+// Détection basée sur le pointeur : la cible est la colonne (ou la carte)
+// SOUS le curseur, peu importe sa hauteur. Indispensable pour pouvoir lâcher
+// dans une colonne vide (« Terminé », « Validé ») — closestCorners accrochait
+// une colonne voisine plus haute. Repli sur rectIntersection si le pointeur
+// est dans un interstice.
+function boardCollisionDetection(args) {
+  const pointerHits = pointerWithin(args)
+  return pointerHits.length > 0 ? pointerHits : rectIntersection(args)
+}
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -35,9 +46,6 @@ function computePosition(sortedTasks, idx) {
 export default function TasksKanbanView({ tasks, commentCounts = {}, onTaskUpdate, onAddTask, onOpenDetail }) {
   const [activeTask, setActiveTask] = useState(null)
 
-  // Snapshot for rollback on DnD error
-  const [snapshot, setSnapshot] = useState(null)
-
   // Local tasks state for optimistic updates
   const [localTasks, setLocalTasks] = useState(null)
   const displayTasks = localTasks ?? tasks
@@ -63,7 +71,6 @@ export default function TasksKanbanView({ tasks, commentCounts = {}, onTaskUpdat
   function handleDragStart({ active }) {
     const task = displayTasks.find(t => t.id === active.id)
     setActiveTask(task ?? null)
-    setSnapshot([...displayTasks])
   }
 
   function handleDragOver({ active, over }) {
@@ -110,32 +117,32 @@ export default function TasksKanbanView({ tasks, commentCounts = {}, onTaskUpdat
     const overIndex = overTask ? columnTasks.findIndex(t => t.id === over.id) : columnTasks.length
     const newPosition = computePosition(columnTasks, overIndex)
 
-    // Optimistic update
+    // Optimistic update local (le temps que le parent resynchronise sa copie)
     const updatedTasks = currentTasks.map(t =>
       t.id === draggedTask.id ? { ...t, status: targetStatus, position: newPosition } : t
     )
     setLocalTasks(updatedTasks)
 
-    // Persist — rollback on error
+    // Persist. Le parent applique sa propre mise à jour optimiste puis resync
+    // (refetch sur erreur). On relâche ENSUITE l'état local pour que les
+    // changements externes (filtres, édition via le panneau de détail) se
+    // reflètent — sinon la vue reste figée sur le dernier snapshot de drag.
     onTaskUpdate(draggedTask.id, { status: targetStatus, position: newPosition })
-      .catch(() => {
-        setLocalTasks(snapshot)
-      })
+      .catch(() => { /* le parent gère le rollback via refetch */ })
       .finally(() => {
-        setSnapshot(null)
+        setLocalTasks(null)
       })
   }
 
   function handleDragCancel() {
     setActiveTask(null)
     setLocalTasks(null)
-    setSnapshot(null)
   }
 
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={boardCollisionDetection}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}

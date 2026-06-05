@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { daysUntil, formatDateOnly, taskPriority, taskStatus, toneClass } from '../../lib/format'
+import { daysUntil, formatDateOnly, taskPriority } from '../../lib/format'
 import { getInternalColor } from '../calendrier/ganttColors'
 
 function initials(name) {
@@ -16,44 +16,18 @@ function borderColor(task) {
   return getInternalColor(country)
 }
 
-export default function TaskCard({ task, commentCount = 0, onClick, isDragOverlay = false }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task.id })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    borderLeftColor: borderColor(task),
-    opacity: isDragging ? 0.35 : 1,
-  }
-
+// Contenu visuel de la carte — partagé entre la carte sortable et l'overlay
+// de drag. L'overlay NE DOIT PAS appeler useSortable (anti-pattern @dnd-kit :
+// enregistrer deux nœuds sous le même id pendant un drag corrompt la
+// résolution du drop → la carte retombe à sa place et rien ne persiste).
+function CardBody({ task, commentCount = 0 }) {
   const prio = taskPriority(task.priority)
   const due = task.due_date
   const daysLeft = due ? daysUntil(due) : null
   const overdue = daysLeft !== null && daysLeft < 0
 
   return (
-    <div
-      ref={setNodeRef}
-      style={isDragOverlay ? { borderLeftColor: borderColor(task) } : style}
-      {...attributes}
-      {...listeners}
-      onClick={(e) => {
-        // Ne pas ouvrir le détail si on est en train de dragger
-        if (!isDragging) onClick?.(task)
-      }}
-      className={[
-        'group cursor-pointer select-none rounded-lg border border-slate-200 border-l-4 bg-white p-3 shadow-sm',
-        'hover:border-slate-300 hover:shadow-md transition-shadow',
-        isDragOverlay ? 'rotate-1 shadow-xl' : '',
-      ].join(' ')}
-    >
+    <>
       {/* Priorité */}
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${prio.badgeClass}`}>
@@ -119,13 +93,58 @@ export default function TaskCard({ task, commentCount = 0, onClick, isDragOverla
           </span>
         ) : null}
       </div>
+    </>
+  )
+}
+
+export default function TaskCard({ task, commentCount = 0, onClick }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    borderLeftColor: borderColor(task),
+    opacity: isDragging ? 0.35 : 1,
+    touchAction: 'none', // évite que le navigateur interprète le drag comme un scroll
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={() => {
+        // Ne pas ouvrir le détail si on est en train de dragger
+        if (!isDragging) onClick?.(task)
+      }}
+      className={[
+        'group cursor-pointer select-none rounded-lg border border-slate-200 border-l-4 bg-white p-3 shadow-sm',
+        'hover:border-slate-300 hover:shadow-md transition-shadow',
+      ].join(' ')}
+    >
+      <CardBody task={task} commentCount={commentCount} />
     </div>
   )
 }
 
-// Version non-sortable pour le DragOverlay (pas de useSortable)
+// Version présentationnelle pour le DragOverlay — PAS de useSortable.
 export function TaskCardOverlay({ task, commentCount = 0 }) {
-  return <TaskCard task={task} commentCount={commentCount} isDragOverlay />
+  return (
+    <div
+      style={{ borderLeftColor: borderColor(task) }}
+      className="group cursor-pointer select-none rotate-1 rounded-lg border border-slate-200 border-l-4 bg-white p-3 shadow-xl"
+    >
+      <CardBody task={task} commentCount={commentCount} />
+    </div>
+  )
 }
 
 function ChatIcon() {

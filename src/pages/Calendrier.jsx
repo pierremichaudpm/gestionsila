@@ -172,6 +172,7 @@ export default function Calendrier() {
     for (const p of taskPeriods) {
       if (!map.has(p.task_id)) map.set(p.task_id, [])
       map.get(p.task_id).push({
+        id: p.id,
         startDate: p.start_date,
         endDate: p.end_date,
         isTentative: p.is_tentative === true,
@@ -333,6 +334,62 @@ export default function Calendrier() {
     setReloadKey(k => k + 1)
   }
 
+  // ─── Édition par glissement dans le Gantt ─────────────────────────
+  // Qui peut déplacer quoi (aligné sur le RLS) :
+  //   - admin : tout.
+  //   - tâches : RLS ouverte (031) → tout membre du projet.
+  //   - jalons / livrables : is_project_writer → écriture sur SON pays.
+  const myCountry = profile?.country ?? null
+  function canEditItem(item) {
+    if (accessLevel === 'admin') return true
+    if (item.source === 'task') {
+      return ['coproducer', 'production_manager', 'partner', 'contractor'].includes(accessLevel)
+    }
+    if (['coproducer', 'production_manager', 'partner'].includes(accessLevel)) {
+      return item.country === myCountry
+    }
+    return false
+  }
+
+  // Persiste un déplacement / redimensionnement. Mise à jour optimiste de
+  // l'état local (la barre reste en place, pas de retour visuel) puis écriture
+  // Supabase ; resync depuis la base en cas d'échec (RLS, etc.).
+  const [dragError, setDragError] = useState(null)
+  async function handleSegmentDrag(item, segIndex, dates) {
+    setDragError(null)
+    try {
+      if (item.source === 'milestone') {
+        const id = item.id.replace(/^milestone-/, '')
+        const patch = { start_date: dates.startDate, end_date: dates.endDate }
+        setMilestones(prev => prev.map(m => m.id === id ? { ...m, ...patch } : m))
+        const { error } = await supabase.from('milestones').update(patch).eq('id', id)
+        if (error) throw error
+      } else if (item.source === 'deliverable') {
+        const id = item.id.replace(/^deliverable-/, '')
+        setDeliverables(prev => prev.map(d => d.id === id ? { ...d, due_date: dates.startDate } : d))
+        const { error } = await supabase.from('deliverables').update({ due_date: dates.startDate }).eq('id', id)
+        if (error) throw error
+      } else if (item.source === 'task') {
+        const period = item.periods?.[segIndex]
+        if (period?.id) {
+          const patch = { start_date: dates.startDate, end_date: dates.endDate }
+          setTaskPeriods(prev => prev.map(p => p.id === period.id ? { ...p, ...patch } : p))
+          const { error } = await supabase.from('task_periods').update(patch).eq('id', period.id)
+          if (error) throw error
+        } else {
+          // Losange = due_date de la tâche (pas de période).
+          const id = item.taskId
+          setTasks(prev => prev.map(t => t.id === id ? { ...t, due_date: dates.startDate } : t))
+          const { error } = await supabase.from('tasks').update({ due_date: dates.startDate }).eq('id', id)
+          if (error) throw error
+        }
+      }
+    } catch (e) {
+      setDragError(e.message ?? 'Le déplacement n’a pas pu être enregistré.')
+      setReloadKey(k => k + 1) // resync : annule l'aperçu optimiste
+    }
+  }
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -359,6 +416,12 @@ export default function Calendrier() {
       {archiveError ? (
         <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {archiveError}
+        </p>
+      ) : null}
+
+      {dragError ? (
+        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {dragError}
         </p>
       ) : null}
 
@@ -390,6 +453,8 @@ export default function Calendrier() {
                   <GanttView
                     items={ganttItems}
                     funders={funders}
+                    canEdit={canEditItem}
+                    onSegmentDrag={handleSegmentDrag}
                     onMilestoneClick={(milestoneId) => {
                       const m = milestones.find(x => x.id === milestoneId)
                       if (m) setDetailMilestone(m)

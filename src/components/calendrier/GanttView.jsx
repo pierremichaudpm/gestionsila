@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { countryFlag, milestoneType } from '../../lib/format'
 import { getFunderColor, getInternalColor, getLotColor, internalLabel } from './ganttColors'
 import ArchiveCheckbox from './ArchiveCheckbox.jsx'
@@ -12,9 +12,16 @@ import ArchiveCheckbox from './ArchiveCheckbox.jsx'
 //                       rendues comme N barres sur une même ligne. Périodes
 //                       « à confirmer » (isTentative) en hachuré.
 //
-// Lecture seule : clic sur un item → callback selon sa source
+// Clic sur un item → callback selon sa source
 // (milestone → onMilestoneClick · deliverable → onDeliverableClick ·
 //  task → onTaskClick).
+//
+// Édition par glissement (si canEdit(item) === true) : on peut déplacer une
+// barre/un losange (les deux dates bougent ensemble) ou tirer un bord pour
+// redimensionner (poignées ◀ ▶ aux extrémités des barres). Au relâchement,
+// onSegmentDrag(item, segIndex, { startDate, endDate }) est appelé avec les
+// nouvelles dates (endDate = null pour un point ponctuel). La conversion
+// pixels → jours utilise le pas fixe DAY_W.
 
 const DAY_W = 18              // px par jour (zoom standard, fixe pour MVP)
 const LABEL_W = 240           // px de la colonne fixe à gauche
@@ -46,12 +53,65 @@ export default function GanttView({
   lots = [],
   groupBy = 'funder',
   laneHeaderLabel,
+  canEdit,
+  onSegmentDrag,
   onMilestoneClick,
   onDeliverableClick,
   onTaskClick,
   onToggleArchive,
 }) {
   const [laneFilter, setLaneFilter] = useState('all')
+
+  // ─── Drag / resize d'un segment ───────────────────────────────────
+  // drag = { key: `${item.id}::${segIndex}`, mode, deltaDays } pour l'aperçu.
+  // dragInfo (ref) retient le contexte mutable pendant le geste.
+  // suppressClick évite que le clic émis après un drag ouvre le modal.
+  const [drag, setDrag] = useState(null)
+  const dragInfo = useRef(null)
+  const suppressClick = useRef(false)
+  const dragging = drag !== null
+
+  function beginDrag(e, item, segIndex, seg, mode) {
+    if (e.button !== undefined && e.button !== 0) return // bouton gauche seul
+    e.preventDefault()
+    e.stopPropagation()
+    dragInfo.current = {
+      startX: e.clientX,
+      mode,
+      item,
+      segIndex,
+      origStart: seg.startDate,
+      origEnd: seg.endDate ?? null,
+    }
+    setDrag({ key: `${item.id}::${segIndex}`, mode, deltaDays: 0 })
+  }
+
+  useEffect(() => {
+    if (!dragging) return
+    function onMove(e) {
+      const info = dragInfo.current
+      if (!info) return
+      const deltaDays = Math.round((e.clientX - info.startX) / DAY_W)
+      setDrag(prev => (prev && prev.deltaDays === deltaDays ? prev : { ...prev, deltaDays }))
+    }
+    function onUp(e) {
+      const info = dragInfo.current
+      const deltaDays = info ? Math.round((e.clientX - info.startX) / DAY_W) : 0
+      dragInfo.current = null
+      setDrag(null)
+      if (!info || deltaDays === 0) return
+      // Un vrai déplacement a eu lieu : neutraliser le clic qui suit.
+      suppressClick.current = true
+      requestAnimationFrame(() => { suppressClick.current = false })
+      onSegmentDrag?.(info.item, info.segIndex, computeDraggedDates(info, deltaDays))
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+  }, [dragging, onSegmentDrag])
   // Swimlanes repliées (par key). Vide au chargement = toutes ouvertes.
   const [collapsedLanes, setCollapsedLanes] = useState(() => new Set())
   function toggleLane(key) {
@@ -64,6 +124,23 @@ export default function GanttView({
 
   // ─── Plage temporelle (tient compte des périodes) ─────────────────
   const range = useMemo(() => computeRange(items), [items])
+
+  // Au premier rendu avec des données, on positionne le défilement horizontal
+  // sur la date du jour (« connecté au calendrier à la date du jour »). On ne
+  // le refait pas ensuite — ça éviterait que le déplacement d'un bloc fasse
+  // « sauter » la vue.
+  const scrollRef = useRef(null)
+  const didScrollRef = useRef(false)
+  useEffect(() => {
+    if (didScrollRef.current) return
+    const el = scrollRef.current
+    if (!el) return
+    const todayD = startOfDay(new Date())
+    if (todayD < range.start || todayD > range.end) return
+    const tX = daysBetween(range.start, todayD) * DAY_W
+    el.scrollLeft = Math.max(0, tX - 80)
+    didScrollRef.current = true
+  }, [range])
 
   // ─── Regroupement par swimlane ────────────────────────────────────
   const lanes = useMemo(
@@ -130,7 +207,7 @@ export default function GanttView({
       </div>
 
       {/* Cadre Gantt */}
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-[color:var(--gantt-bg)] shadow-sm">
+      <div ref={scrollRef} className="overflow-x-auto rounded-lg border border-slate-200 bg-[color:var(--gantt-bg)] shadow-sm">
         <div style={{ minWidth: LABEL_W + scaleWidth }}>
           {/* Header timeline */}
           <div className="flex border-b border-slate-200 bg-[color:var(--gantt-bg)]">
@@ -198,6 +275,10 @@ export default function GanttView({
                 onDeliverableClick={onDeliverableClick}
                 onTaskClick={onTaskClick}
                 onToggleArchive={onToggleArchive}
+                canEdit={canEdit}
+                drag={drag}
+                onBeginDrag={beginDrag}
+                suppressClickRef={suppressClick}
               />
             ))}
             {todayX !== null ? (
@@ -224,6 +305,11 @@ export default function GanttView({
         {'   ·   '}
         Trait rouge = aujourd'hui · Hachures = {groupBy === 'lot' ? 'période à confirmer' : 'livrable soumis ou validé'}
       </p>
+      {onSegmentDrag ? (
+        <p className="text-[11px] italic text-slate-400">
+          Astuce : glissez un bloc pour le déplacer, ou tirez un bord pour changer une seule date. Seuls les éléments que vous pouvez modifier sont déplaçables.
+        </p>
+      ) : null}
     </section>
   )
 }
@@ -309,7 +395,7 @@ function sortLaneItems(lane) {
 }
 
 // ─── Swimlane ───────────────────────────────────────────────────────
-function Swimlane({ lane, rangeStart, scaleWidth, emptyLabel = 'Aucune entrée', collapsed = false, onToggleCollapse, onMilestoneClick, onDeliverableClick, onTaskClick, onToggleArchive }) {
+function Swimlane({ lane, rangeStart, scaleWidth, emptyLabel = 'Aucune entrée', collapsed = false, onToggleCollapse, onMilestoneClick, onDeliverableClick, onTaskClick, onToggleArchive, canEdit, drag, onBeginDrag, suppressClickRef }) {
   return (
     <div className="border-b border-slate-200 last:border-b-0">
       <div className="flex" style={{ height: LANE_HEADER_H, background: 'var(--gantt-header)' }}>
@@ -358,6 +444,10 @@ function Swimlane({ lane, rangeStart, scaleWidth, emptyLabel = 'Aucune entrée',
             onDeliverableClick={onDeliverableClick}
             onTaskClick={onTaskClick}
             onToggleArchive={onToggleArchive}
+            editable={canEdit ? canEdit(item) : false}
+            drag={drag}
+            onBeginDrag={onBeginDrag}
+            suppressClickRef={suppressClickRef}
           />
         ))
       )}
@@ -366,7 +456,7 @@ function Swimlane({ lane, rangeStart, scaleWidth, emptyLabel = 'Aucune entrée',
 }
 
 // ─── Ligne d'item (1..N barres / losanges selon les périodes) ───────
-function ItemRow({ item, color, rangeStart, scaleWidth, onMilestoneClick, onDeliverableClick, onTaskClick, onToggleArchive }) {
+function ItemRow({ item, color, rangeStart, scaleWidth, onMilestoneClick, onDeliverableClick, onTaskClick, onToggleArchive, editable, drag, onBeginDrag, suppressClickRef }) {
   const isMilestone = item.source === 'milestone'
   const milestoneId = isMilestone ? item.id.replace(/^milestone-/, '') : null
 
@@ -374,6 +464,8 @@ function ItemRow({ item, color, rangeStart, scaleWidth, onMilestoneClick, onDeli
   const itemDimmed = item.source === 'deliverable' && (item.status === 'submitted' || item.status === 'validated')
 
   function handleClick() {
+    // Neutralise le clic émis juste après un drag (sinon le modal s'ouvre).
+    if (suppressClickRef?.current) { suppressClickRef.current = false; return }
     if (item.source === 'milestone') onMilestoneClick?.(item.id.replace(/^milestone-/, ''))
     else if (item.source === 'deliverable') onDeliverableClick?.(item.id.replace(/^deliverable-/, ''))
     else if (item.source === 'task') onTaskClick?.(item.taskId ?? item.id.replace(/^task-/, ''))
@@ -397,12 +489,17 @@ function ItemRow({ item, color, rangeStart, scaleWidth, onMilestoneClick, onDeli
           <Segment
             key={idx}
             seg={seg}
+            segIndex={idx}
+            item={item}
             color={color}
             rangeStart={rangeStart}
             itemDimmed={itemDimmed}
             label={item.title}
             tooltip={buildTooltip(item, seg)}
             onClick={handleClick}
+            editable={editable}
+            drag={drag}
+            onBeginDrag={onBeginDrag}
           />
         ))}
       </div>
@@ -411,24 +508,43 @@ function ItemRow({ item, color, rangeStart, scaleWidth, onMilestoneClick, onDeli
 }
 
 // ─── Une barre (ou losange) pour une période ────────────────────────
-function Segment({ seg, color, rangeStart, itemDimmed, label, tooltip, onClick }) {
+function Segment({ seg, segIndex, item, color, rangeStart, itemDimmed, label, tooltip, onClick, editable, drag, onBeginDrag }) {
   if (!seg.startDate) return null
   const isPunctual = !seg.endDate || seg.startDate === seg.endDate
   const start = parseDate(seg.startDate)
   const end = seg.endDate ? parseDate(seg.endDate) : start
-  const offsetDays = daysBetween(rangeStart, start)
-  const durationDays = daysBetween(start, end) + 1
+  let offsetDays = daysBetween(rangeStart, start)
+  let durationDays = daysBetween(start, end) + 1
+
+  // Aperçu live pendant le drag de CE segment (décalage en jours).
+  const isActiveDrag = drag && drag.key === `${item.id}::${segIndex}`
+  if (isActiveDrag) {
+    const dd = drag.deltaDays
+    if (drag.mode === 'move') offsetDays += dd
+    else if (drag.mode === 'resize-start') { offsetDays += dd; durationDays -= dd }
+    else if (drag.mode === 'resize-end') { durationDays += dd }
+    if (durationDays < 1) durationDays = 1
+  }
 
   const dimmed = itemDimmed || seg.isTentative
   const hatched = dimmed
+  const barWidth = Math.max(DAY_W, durationDays * DAY_W)
+  // Poignées de resize seulement si la barre est assez large : sinon elles
+  // couvrent toute la surface et on ne peut plus déplacer le bloc entier.
+  const showHandles = editable && barWidth >= 44
+
+  const onKeyActivate = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }
 
   if (isPunctual) {
     return (
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         title={tooltip}
         onClick={onClick}
-        className="absolute z-[1] cursor-pointer transition-transform hover:scale-110"
+        onKeyDown={onKeyActivate}
+        onPointerDown={editable ? (e) => onBeginDrag(e, item, segIndex, seg, 'move') : undefined}
+        className="absolute z-[1] transition-transform hover:scale-110"
         style={{
           left: offsetDays * DAY_W + DAY_W / 2 - 7,
           top: ROW_H / 2 - 7,
@@ -437,8 +553,11 @@ function Segment({ seg, color, rangeStart, itemDimmed, label, tooltip, onClick }
           opacity: dimmed ? 0.55 : 1,
           transform: 'rotate(45deg)',
           border: '1px solid rgba(255,255,255,0.4)',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+          boxShadow: isActiveDrag ? '0 2px 6px rgba(0,0,0,0.35)' : '0 1px 2px rgba(0,0,0,0.15)',
           padding: 0,
+          cursor: editable ? 'grab' : 'pointer',
+          touchAction: editable ? 'none' : undefined,
+          zIndex: isActiveDrag ? 5 : 1,
         }}
         aria-label={label}
       />
@@ -446,29 +565,57 @@ function Segment({ seg, color, rangeStart, itemDimmed, label, tooltip, onClick }
   }
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       title={tooltip}
       onClick={onClick}
-      className="absolute flex cursor-pointer items-center overflow-hidden rounded-[4px] px-2 text-[12px] font-medium text-white transition-shadow hover:shadow-md"
+      onKeyDown={onKeyActivate}
+      onPointerDown={editable ? (e) => onBeginDrag(e, item, segIndex, seg, 'move') : undefined}
+      className="absolute flex items-center overflow-hidden rounded-[4px] px-2 text-[12px] font-medium text-white transition-shadow hover:shadow-md"
       style={{
         left: offsetDays * DAY_W,
         top: 6,
         height: ROW_H - 12,
-        width: Math.max(DAY_W, durationDays * DAY_W),
+        width: barWidth,
         background: color,
         opacity: dimmed ? 0.55 : 1,
         backgroundImage: hatched
           ? 'linear-gradient(135deg, rgba(255,255,255,0.18) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.18) 75%, transparent 75%)'
           : undefined,
         backgroundSize: hatched ? '8px 8px' : undefined,
-        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08), 0 1px 2px rgba(0,0,0,0.06)',
+        boxShadow: isActiveDrag
+          ? 'inset 0 0 0 1px rgba(255,255,255,0.2), 0 2px 8px rgba(0,0,0,0.3)'
+          : 'inset 0 0 0 1px rgba(255,255,255,0.08), 0 1px 2px rgba(0,0,0,0.06)',
         border: 'none',
         textAlign: 'left',
+        cursor: editable ? 'grab' : 'pointer',
+        touchAction: editable ? 'none' : undefined,
+        zIndex: isActiveDrag ? 5 : 1,
       }}
     >
-      <span className="truncate">{label}</span>
-    </button>
+      <span className="pointer-events-none truncate">{label}</span>
+      {showHandles ? (
+        <>
+          <span
+            onPointerDown={(e) => onBeginDrag(e, item, segIndex, seg, 'resize-start')}
+            onClick={(e) => e.stopPropagation()}
+            title="Glisser pour changer la date de début"
+            className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize rounded-l-[4px] hover:bg-white/30"
+            style={{ touchAction: 'none' }}
+            aria-label="Redimensionner le début"
+          />
+          <span
+            onPointerDown={(e) => onBeginDrag(e, item, segIndex, seg, 'resize-end')}
+            onClick={(e) => e.stopPropagation()}
+            title="Glisser pour changer la date de fin"
+            className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize rounded-r-[4px] hover:bg-white/30"
+            style={{ touchAction: 'none' }}
+            aria-label="Redimensionner la fin"
+          />
+        </>
+      ) : null}
+    </div>
   )
 }
 
@@ -514,6 +661,34 @@ function sameDay(a, b) {
   return a.getFullYear() === b.getFullYear()
     && a.getMonth() === b.getMonth()
     && a.getDate() === b.getDate()
+}
+function fmtDate(d) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+// Calcule les nouvelles dates d'un segment après un drag de `deltaDays` jours.
+// - move          : les deux dates se décalent ensemble.
+// - resize-start  : seule la date de début bouge (bornée à ≤ fin).
+// - resize-end    : seule la date de fin bouge (bornée à ≥ début).
+// endDate reste null si le segment d'origine était ponctuel (préserve la forme).
+function computeDraggedDates(info, deltaDays) {
+  const start = parseDate(info.origStart)
+  const hasEnd = !!info.origEnd
+  const end = hasEnd ? parseDate(info.origEnd) : start
+  let ns = start
+  let ne = end
+  if (info.mode === 'move') {
+    ns = addDays(start, deltaDays)
+    ne = addDays(end, deltaDays)
+  } else if (info.mode === 'resize-start') {
+    ns = addDays(start, deltaDays)
+    if (ns > end) ns = end
+  } else if (info.mode === 'resize-end') {
+    ne = addDays(end, deltaDays)
+    if (ne < start) ne = start
+  }
+  return { startDate: fmtDate(ns), endDate: hasEnd ? fmtDate(ne) : null }
 }
 
 function computeRange(items) {
